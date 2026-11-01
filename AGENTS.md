@@ -15,8 +15,8 @@ as a standalone hexagonal protocol: a simulator-agnostic `core/` and an ns-3
 replaces AntHocNet's `ara` comparator arm.
 
 ```
-core/       simulator-agnostic algorithm + unit tests (no ns-3 headers)
-ns3/        contrib module `ara`: header codec, adapter, helper, examples, test suite
+core/       simulator-agnostic algorithm + unit tests (no ns-3 headers; MIT OR GPL-2.0-only, core/LICENSE)
+ns3/        contrib module `ara` (GPL-2.0-only): header codec, adapter, helper, examples, test suite
 docs/       fidelity sheet (paper section -> implementation), parameters with sources
 ```
 
@@ -39,18 +39,26 @@ CI passes `dependencies: swarm-core=swarm-routing/ns3-swarm-core@main`.
 
 Org-wide (1–9), then this repo's own.
 
-1. **SPDX header on every original source file.** `.h`, `.cc`, `.cpp`, `.py`
-   (and scripts, workflows) start with
+1. **Licensing per directory, as AntHocNet** ([`LICENSING.md`](LICENSING.md);
+   AntHocNet [LICENSING.md](https://github.com/danieljoppi/AntHocNet/blob/main/LICENSING.md),
+   [ADR-0028](https://github.com/danieljoppi/AntHocNet/blob/main/docs/adr/0028-core-is-dual-licensed.md)). A
+   simulator-free `core/` and the standalone tooling are `MIT OR GPL-2.0-only`;
+   ns-3 modules, the site, docs and data are `GPL-2.0-only`. Every original
+   `.h`/`.hpp`/`.cc`/`.cpp`/`.py`/`.sh` starts with
    `// Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)` +
-   `// SPDX-License-Identifier: MIT` (`#` comments where needed). CI checks it.
-2. **No GPL code in an MIT repo.** Never copy from ns-3's `src/aodv`, `src/olsr`
-   or any other ns-3 module; implement against public ns-3 interfaces. From
-   AntHocNet, only the `MIT OR GPL-2.0-only` paths (`core/`, `tools/`,
-   `ns3/tools/`, `docs/tools/`) may be extracted as-is. Its `ns3/` modules
-   (the `adaptive` arms, `routing-bench`, `oracle`) are **GPL-2.0-only**:
-   bringing one here needs the copyright holder's explicit relicensing
-   decision recorded in an issue first. `ns3/baselines/aomdv` and `gpsr` are
-   third-party GPL and never come here.
+   `// SPDX-License-Identifier: <MIT OR GPL-2.0-only | GPL-2.0-only>` (`#`
+   comments where needed), matching its directory in `LICENSING.md`. CI
+   (`reusable-licence-check.yml`) checks it. A new directory gets its row in
+   `LICENSING.md` in the same PR.
+2. **The licence boundary only goes one way.** GPL code may use the dual
+   parts; dual code never pulls GPL-only code in: a `core/` file includes only
+   the C++ standard library and other `core/` files (CI checks it), and a dual
+   script imports no GPL-only code. Code coming from AntHocNet keeps its
+   licence: its `core/`/`tools/` (dual) may land in dual or GPL paths here; its
+   `ns3/` modules and `web/` (GPL-2.0-only) only in GPL paths. Third-party code
+   (AntHocNet's vendored `aomdv`/`gpsr`, IITP RAS) lands only in GPL paths with
+   its provenance recorded. Write clean implementations against public ns-3
+   interfaces rather than copying ns-3's `src/aodv`/`src/olsr`.
 3. **Wire formats are POD + versioned.** Control headers are
    simulator-independent POD structs with bounds-checked little-endian
    readers/writers, a leading version byte, and deterministic roundtrip + fuzz
@@ -74,7 +82,7 @@ Org-wide (1–9), then this repo's own.
    that anything shipped needs live in `tools/` (AntHocNet ADR-0014).
 10. **`core/` never includes a simulator header**; the adapter only converts headers, executes `RouteDecision`s and owns timers/queues (AntHocNet golden rules 1–2).
 11. **Paper fidelity is written down.** Every parameter default cites its paper section or is marked a repo choice; deviations live in `docs/fidelity.md`.
-12. **AntHocNet's `ara` arm is GPL-2.0-only.** Reimplement from the paper and the fidelity notes, or get the relicensing decision recorded in an issue before reusing its code (rule 2).
+12. **Mind the licence split when promoting AntHocNet's `ara` arm.** It is GPL-2.0-only: its ns-3 code may land in `ns3/` (GPL) as-is, but the algorithm extracted into `core/` (dual) must be written fresh or carry the copyright holder's dual-licence grant recorded in an issue (AntHocNet ADR-0028's provenance gate).
 
 ## Conventions
 
@@ -110,7 +118,7 @@ Org-wide (1–9), then this repo's own.
 
 | You want to… | Go to |
 |--------------|-------|
-| The arm being promoted (reference only, GPL) | AntHocNet `ns3/baselines/adaptive/model/ara-routing-protocol.{h,cc}`, AntHocNet #586 (closed) |
+| The arm being promoted (GPL-2.0-only) | AntHocNet `ns3/baselines/adaptive/model/ara-routing-protocol.{h,cc}`, AntHocNet #586 (closed) |
 | Shared primitives | `swarm-routing/ns3-swarm-core` |
 | Benchmark against AODV/OLSR/AntHocNet | `swarm-routing/ns3-tools` arenas, results into `swarm-routing/benchmarks` |
 | The org's invariants, labels, issue shape | [`swarm-routing/.github` CONTRIBUTING.md](https://github.com/swarm-routing/.github/blob/main/CONTRIBUTING.md) |
