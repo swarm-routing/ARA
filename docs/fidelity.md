@@ -35,8 +35,8 @@ Every row below is the **2002 version** unless it says otherwise. AntHocNet's
 `ara` arm was written from [G02] but took several behaviours that [R05]
 attributes to ARA2 (see *Differences from AntHocNet's `ara` arm*). Because the
 anchor comes from [G02], the fresh `core/` should implement the 2002 version and
-treat any ARA2 behaviour as a stated deviation. The maintainer confirms this
-choice, and the open readings below, in #15 before code.
+treat any ARA2 behaviour as a stated deviation. Decided in #15 (2026-11-09),
+with the four readings below.
 
 ## Mechanisms
 
@@ -46,21 +46,21 @@ choice, and the open readings below, in #15 before code.
 | Routing table entry is the triple (destination, next hop, pheromone ϕ) | [G02] §3.1 | Pheromone table keyed (destination, neighbour); `swarm-core` `PheromoneTable` if it fits | as written |
 | Forward ant (FANT): broadcast by the sender, relayed by every node, unique sequence number | [G02] §3.1, Fig. 2 | FANT carries source, destination, sequence number, hop count; flooded | as written |
 | FANT duplicates (same source and sequence number) are destroyed | [G02] §3.1, §3.4 | Bounded (source, seq) history; later copies dropped without touching the table | as written |
-| A node seeing a FANT for the first time records (FANT source, previous hop, ϕ = f(hops)); one trail toward the source per discovery | [G02] §3.1 | Entry toward the source over the previous hop; f is the open parameter below | unknown: f is not given. [R05] p. 60 instead reads the FANT as depositing a constant amount; a pre-registered reading is needed |
+| A node seeing a FANT for the first time records (FANT source, previous hop, ϕ = f(hops)); one trail toward the source per discovery | [G02] §3.1 | Entry toward the source over the previous hop with a constant initial ϕ (value below) | as written; reading decided in #15: f is a constant, as [R05] p. 60 reads it |
 | Destination destroys the FANT and answers with a backward ant (BANT) that lays the trail toward the destination | [G02] §3.1, Fig. 3 | BANT handled like the FANT, roles swapped | as written |
-| How the BANT travels back (unicast along the FANT's path, or flooded) | [G02] §3.1, Fig. 3; [R05] p. 60; [AR12] §4.2 | To be pre-registered (#15) | unknown: [G02] does not say. Its Fig. 3 text has the BANT create **two** trails at node 3 (via 4 and via 6), which a single unicast retrace cannot do; both secondaries read it as returned along the forward path |
+| How the BANT travels back (unicast along the FANT's path, or flooded) | [G02] §3.1, Fig. 3; [R05] p. 60; [AR12] §4.2 | BANT unicast back along the FANT's recorded path | deviation: [G02] does not say; decided in #15 (both secondaries' reading; a flooded BANT looped in the old arm). Cost: Fig. 3's second trail at node 3 is not reproduced |
 | Data may be sent once the source receives the BANT | [G02] §3.1 | Data starts after the first BANT; what happens to data that arrives before it is the open buffering row below | as written (sending after the BANT); holding data meanwhile is not in [G02] |
 | Data packets waiting for a route (buffering, limits, timeouts) | unknown | To be chosen | unknown: [G02] is silent; [R05] p. 62 lists data buffering as an ARA2 addition |
 | Route maintenance by data: the relaying node adds Δϕ to (D, next hop); the next hop adds Δϕ to (S, previous hop) | [G02] §3.2 | Both reinforcements on every data hop | as written |
 | Evaporation by eq. 2, ϕ := (1 − q)·ϕ, applied regularly | [G02] §2.2, eq. 2, §3.2 | Periodic decay with an injected timer port | as written (q and period open, below) |
 | A trail decays to zero when no ant or data visits it; the route is then gone | [G02] §3.4 | Entry dropped below an expiry threshold | as written (threshold open, below) |
 | Multi-path: a node keeps several next hops per destination | [G02] §3.1, §3.4 | All positive-ϕ neighbours kept | as written |
-| Next-hop choice for data among the trails | [G02] §2.2, §3.4; [R05] pp. 60–61 | To be pre-registered (#15) | unknown: §3 never states the data rule. §2.2 gives p = ϕ/Σϕ for ants in the generic ACO; §3.4 says the choice "depends on the environment". [R05] p. 60 says original ARA forwarded deterministically on the highest ϕ, and p. 61 that probabilistic forwarding arrived with ARA2 |
+| Next-hop choice for data among the trails | [G02] §2.2, §3.4; [R05] pp. 60–61 | Deterministic: the neighbour with the highest ϕ; ϕ/Σϕ only as a later default-off switch | as written per [R05] p. 60's reading of 2002 ARA; decided in #15 |
 | Loop prevention: duplicate data (source address, sequence number) is returned with the DUPLICATE_ERROR flag; the previous node deactivates that link | [G02] §3.2 | Data dedup on (source, seq); the flag rides in the adapter's header or a tag; receiver sets that link's ϕ to 0 | as written (which "sequence number" a data packet carries is a repo choice, below) |
-| FANT/BANT loop freedom through their sequence numbers | [G02] §3.4 | Covered by the ant dedup row | as written for FANTs; unknown: whether a second BANT copy may still update the table (Fig. 3's two trails at node 3 need it) is open with the BANT path (#15) |
+| FANT/BANT loop freedom through their sequence numbers | [G02] §3.4 | Covered by the ant dedup row; BANT duplicates dropped like FANTs | as written; BANT duplicates decided in #15 with the unicast BANT path |
 | Route failure detected by a missing acknowledgement | [G02] §3.3 | MAC retry-limit failure from the adapter, through an `ILinkState` port | as written; [G02] does not say which acknowledgement, and also mentions a ROUTE ERROR message for a link without defining it |
 | On a failed link: set its ϕ to 0, send the packet on another link if one exists | [G02] §3.3 | Same | as written |
-| No other link: the node "informs its neighbors"; backtracking continues toward the source, which starts a new discovery | [G02] §3.3; [R05] p. 60 | Return the packet to the previous hop, which repeats the step | unknown: "informs its neighbors" can mean a broadcast or a return to the previous hop; [R05] reads the latter |
+| No other link: the node "informs its neighbors"; backtracking continues toward the source, which starts a new discovery | [G02] §3.3; [R05] p. 60 | Return the packet to the previous hop, which repeats the step, up to the source | as written per [R05]'s reading; decided in #15 (backtracking, not a broadcast) |
 | Discovery retries when no BANT returns | unknown | To be chosen | unknown: [G02] is silent |
 | Control packets carry only a sequence number and the IP header's information | [G02] §3.5 | FANT/BANT as a POD, versioned header (org rule 3); a hop-count field is needed for f(hops) | as written (header layout: repo choice under org rule 3) |
 | Ants share queues with data | [R05] p. 61 | No priority for ants | as written ([R05] states it for 2002 ARA; ant priority is an ARA2 change) |
@@ -72,7 +72,7 @@ choice, and the open readings below, in #15 before code.
 | Parameter | Value | Source | Notes |
 |---|---|---|---|
 | Deposit Δϕ per data packet (and per ant, generic ACO) | — | unknown | [G02] eq. 1 and §3.2 use Δϕ without a value |
-| Initial FANT/BANT pheromone f(hops) | — | unknown | [G02] §3.1: "depending on the number of hops"; no formula. [R05] p. 60 reads a constant |
+| Initial FANT/BANT pheromone f(hops) | — | unknown | [G02] §3.1: "depending on the number of hops"; no formula. A constant (#15, as [R05] p. 60 reads it); its value is still open |
 | Evaporation rate q, range | (0, 1] | [G02] eq. 2 | Range only |
 | Evaporation rate q, value | — | unknown | |
 | Evaporation period | — | unknown | [G02] §3.2: "regular decreasing". [R05] p. 61 says the pre-ARA2 schemes decayed on a fixed period "such as one second", not as ARA's value |
