@@ -92,7 +92,7 @@ choice, and the open readings below, in #15 before code.
 | Pause times | 0, 30, 60, 120, 300, 600, 900 s | [G02] §4.1 | 0 s moves constantly; 900 s is static |
 | Simulated time | 900 s | [G02] §4.1 | |
 | Traffic | 10 CBR connections | [G02] §4.2 | "parameters similar to those in [2]" (Broch et al., MobiCom 1998) |
-| CBR packet size and rate | — | unknown | Deferred to Broch et al. 1998; fill from that paper, not from memory |
+| CBR packet size and rate | — | unknown | [G02] §4.2 only says "similar to" Broch et al. 1998. Read that paper rather than recalling it; values taken from it become `repo choice: Broch et al. 1998's values, which [G02] calls similar`, never [G02]'s |
 | Runs per point | 10 | [G02] §4.2, Fig. 5 | |
 | Confidence interval | 95 % (α = 0.05) | [G02] Fig. 5, Fig. 7, Fig. 9 | |
 | Overhead metrics | routing bits / data bits; routing packets | [G02] Fig. 6, Fig. 8 | |
