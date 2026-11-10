@@ -21,5 +21,4 @@ description = "ARA, the Ant-Colony-Based Routing Algorithm (Güneş, Sorges & Bo
 homepage = "https://swarm-routing.github.io/arena/ARA/"
 topics = ["ara", "ant-colony-optimization", "aco", "swarm-intelligence", "manet", "ad-hoc-routing", "routing-protocol", "ns-3", "network-simulation"]
 ruleset = "protocol"
-# The PR-title and licence checks are added here once this repository runs them (swarm-routing/.github#117).
-required_checks = ["check / org-sync"]
+required_checks = ["check / org-sync", "title / title", "headers / licence"]
