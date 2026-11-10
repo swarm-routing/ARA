@@ -73,6 +73,21 @@ void TestDiscoveryOnALine(Checker& c) {
             "one trail from source to destination");
     c.check(diamond.node(1).onLocalData(4).nextHop == hop, "data follows it");
     c.check(diamond.node(4).nextHop(1) != kInvalidAddress, "and the way back exists");
+
+    // Two sources, each on its first discovery (both seq 1), toward one
+    // destination through a shared relay: the two BANTs are different
+    // discoveries and must both get through.
+    Network shared(1);
+    shared.addLink(1, 3);
+    shared.addLink(2, 3);
+    shared.addLink(3, 4);
+    shared.node(1).onLocalData(4);
+    shared.node(2).onLocalData(4);
+    shared.events().runUntil(1.0);
+    c.check(shared.node(1).nextHop(4) == 3 && shared.node(2).nextHop(4) == 3,
+            "both sources get a trail: BANTs are keyed by their discovery");
+    c.check(!shared.node(1).discovering(4) && !shared.node(2).discovering(4),
+            "both discoveries complete");
 }
 
 void TestDeterminism(Checker& c) {

@@ -139,7 +139,10 @@ void Router::onForwardAnt(const AntMessage& ant, NodeAddress from) {
 
 void Router::onBackwardAnt(const AntMessage& ant, NodeAddress from) {
     // Fidelity "FANT/BANT loop freedom": BANT duplicates dropped like FANTs.
-    if (!bantHistory_.record(ant.source, ant.sequence)) return;
+    // Keyed by the discovery, (FANT originator, FANT sequence), as the reverse
+    // pointers are: sequences are per originator, so the BANT's own (source,
+    // seq) would collide across discoveries toward one destination.
+    if (!bantHistory_.record(ant.destination, ant.sequence)) return;
     const auto hops = static_cast<std::uint8_t>(std::min<int>(ant.hops + 1, 255));
     layTrail(ant.source, from, hops);
 
