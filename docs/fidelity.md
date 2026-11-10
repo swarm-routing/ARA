@@ -11,7 +11,10 @@ printed page numbers.
 `core/` is being written in slices under [#5](https://github.com/swarm-routing/ARA/issues/5).
 The first slice is route discovery: the FANT/BANT rows, evaporation, the
 next-hop choice, the discovery retries and the ant wire header, with their
-constants in `core/ara-config.h`. The other rows are not implemented yet; for
+constants in `core/ara-config.h`. The ns-3 module `ara` (`ns3/`) carries that slice out on
+swarm-core's `SwarmRoutingBase` with no constant of its own: a data packet with
+no trail is dropped at once, by the adapter as by the core (row "Data packets
+waiting for a route"). The other rows are not implemented yet; for
 them the **Implementation** column records what the fresh implementation is to
 do, and **Status** says how that plan stands against the paper. Section, equation and figure numbers are the
 paper's; [G02]'s seven pages are the proceedings pages 79–85. Page numbers for
