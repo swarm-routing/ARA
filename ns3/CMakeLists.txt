@@ -11,7 +11,7 @@
 #
 # ns-3 reaches this directory through contrib/ara, a link to the checkout's
 # ns3/: core/ is found beside the link's target, not beside the link.
-file(REAL_PATH "${CMAKE_CURRENT_SOURCE_DIR}" ara_ns3_dir)
+get_filename_component(ara_ns3_dir "${CMAKE_CURRENT_SOURCE_DIR}" REALPATH)  # CMake < 3.19 too
 get_filename_component(ara_core_dir "${ara_ns3_dir}/../core" ABSOLUTE)
 # core/ includes swarm-core's primitives without the ns3/ prefix (they are the
 # same files as ns3/swarm-*.h), so it builds alone as well.

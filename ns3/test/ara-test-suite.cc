@@ -12,7 +12,9 @@
 //   dropped rather than held (fidelity "Data packets waiting for a route");
 // - determinism: the same seed gives the same ant and delivery trace, another
 //   seed another (org rule 5).
-#include "../../core/test/ara-core-tests.h"
+// Through the include path (core/, resolved past the contrib link), not
+// "../../core/...": gcov would collapse that beside the link, not its target.
+#include "test/ara-core-tests.h"
 #include "../model/ara-header.h"
 
 #include "ns3/ara-helper.h"

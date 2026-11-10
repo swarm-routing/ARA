@@ -60,9 +60,11 @@ docker run --rm -v "$PWD:/src/ara:ro" -v "$PWD/../ns3-swarm-core:/src/ns3-swarm-
 ```
 
 (`make test` does the same with `SWARM_CORE_NS3=<checkout>`, default
-`../ns3-swarm-core`). To build and run the harness arm, also mount
-`swarm-routing/ns3-tools` and add `routing-bench=/src/ns3-tools/ns3/routing-bench`
-before `ara=`, then `./ns3 run "routing-compare --protocols=ara ..."`. CI
+`../ns3-swarm-core`). To build the harness arm and run it in the same
+container, also mount `swarm-routing/ns3-tools` at `/src/ns3-tools`, add
+`routing-bench=/src/ns3-tools/ns3/routing-bench` before `ara=`, and pass
+`--run "routing-compare --scenario=paper --nNodes=20 --time=30 --runs=1
+--protocols=ara"` to `ns3-build-contrib`. CI
 (`.github/workflows/ns3.yml`) passes `dependencies:
 swarm-core=swarm-routing/ns3-swarm-core@main` and
 `routing-bench=swarm-routing/ns3-tools@main:ns3/routing-bench`, runs
