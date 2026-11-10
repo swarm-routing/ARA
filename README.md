@@ -18,8 +18,10 @@ ARA, the Ant-Colony-Based Routing Algorithm (Güneş, Sorges & Bouazizi, 2002),
 as a standalone protocol: a simulator-agnostic `core/` and the ns-3 contrib
 module `ara` on
 [`swarm-core`](https://github.com/swarm-routing/ns3-swarm-core). **Status:**
-the org's Phase 3; `core/` is being written (route discovery first), the ns-3
-module follows.
+the org's Phase 3; route discovery, the first slice of `core/`, runs in ns-3
+as the module `ara` (header codec, adapter, helper, example, `test.py -s ara`,
+and the `ara` arm of ns3-tools' `routing-compare`); data reinforcement,
+duplicate errors and route-failure backtracking follow, then the anchor.
 
 How to work here, for people and AI agents alike: [AGENTS.md](AGENTS.md) has
 the rules and how to build and verify; the org conventions are in

@@ -7,7 +7,7 @@ before changing anything. Org-wide conventions:
 
 ## What this repo is
 
-**Status: `core/` in progress (Phase 3, #5).** Its first slice, route discovery (FANT/BANT, trails, evaporation, next hop, discovery retries, the ant wire header), builds and tests on its own; data forwarding, duplicate errors and route-failure backtracking come next. `ns3/` is still the plan (marked below); update this file in the PR that creates it.
+**Status: `core/` and `ns3/` in progress (Phase 3, #5).** The core's first slice, route discovery (FANT/BANT, trails, evaporation, next hop, discovery retries, the ant wire header), builds and tests on its own and inside ns-3 as the contrib module `ara`, whose adapter carries it out on swarm-core's `SwarmRoutingBase`; data reinforcement, duplicate errors and route-failure backtracking come next, then the anchor.
 
 ARA, the Ant-Colony-Based Routing Algorithm (Güneş, Sorges & Bouazizi, 2002),
 as a standalone hexagonal protocol: a simulator-agnostic `core/` and an ns-3
@@ -37,10 +37,13 @@ cmake -S core -B build/asan -DARA_CORE_SANITIZE=ON -DSWARM_CORE_DIR=/path/to/ns3
 
 It fetches swarm-core at `SWARM_CORE_REF` unless `SWARM_CORE_DIR` names a
 checkout's `core/`; bump the pin together with `core-deps` in
-`.github/workflows/licence.yml` and `SWARM_CORE_REF` in the `Makefile`.
-Once `ns3/` exists:
+`.github/workflows/licence.yml` and `.github/workflows/ns3.yml`, and
+`SWARM_CORE_REF` in the `Makefile`. The ns-3 module builds on swarm-core
+`main` instead; ns3.yml's `swarm-core pin` job fails when main's `core/` is no
+longer the pinned one, or when the four places name different SHAs, so a
+swarm-core change is met by a pin bump here.
 
-CI is [`reusable-ns3-ci.yml`](https://github.com/swarm-routing/.github/blob/main/.github/workflows/reusable-ns3-ci.yml):
+CI for `ns3/` is [`reusable-ns3-ci.yml`](https://github.com/swarm-routing/.github/blob/main/.github/workflows/reusable-ns3-ci.yml):
 the module builds inside `ghcr.io/swarm-routing/ns3-dev:latest-{debug,sanitized}`
 (warm ns-3 tree; only the module compiles) and runs its test.py suites.
 `latest` is the release ns-3 supports (it maintains its latest only), so
@@ -50,12 +53,24 @@ CONTRIBUTING invariant 7). The
 same locally:
 
 ```bash
-docker run --rm -v "$PWD:/src/ara:ro" ghcr.io/swarm-routing/ns3-dev:latest-debug \
-    ns3-build-contrib --test swarm-core=/src/ns3-swarm-core ara=/src/ara/ns3
+docker run --rm -v "$PWD:/src/ara:ro" -v "$PWD/../ns3-swarm-core:/src/ns3-swarm-core:ro" \
+    ghcr.io/swarm-routing/ns3-dev:latest-debug \
+    ns3-build-contrib --strict-warnings --quality-modules ara --test \
+    swarm-core=/src/ns3-swarm-core ara=/src/ara/ns3
 ```
 
-(mount a checkout of `swarm-routing/ns3-swarm-core` at `/src/ns3-swarm-core`).
-CI passes `dependencies: swarm-core=swarm-routing/ns3-swarm-core@main`.
+(`make test` does the same with `SWARM_CORE_NS3=<checkout>`, default
+`../ns3-swarm-core`). To build the harness arm and run it in the same
+container, also mount `swarm-routing/ns3-tools` at `/src/ns3-tools`, add
+`routing-bench=/src/ns3-tools/ns3/routing-bench` before `ara=`, and pass
+`--run "routing-compare --scenario=paper --nNodes=20 --time=30 --runs=1
+--protocols=ara"` to `ns3-build-contrib`. CI
+(`.github/workflows/ns3.yml`) passes `dependencies:
+swarm-core=swarm-routing/ns3-swarm-core@main` and
+`routing-bench=swarm-routing/ns3-tools@main:ns3/routing-bench`, runs
+`routing-compare --scenario=paper --nNodes=20 --time=30 --runs=1
+--protocols=ara` as the smoke and `ara-example --seed={seed}` as the
+determinism program.
 
 ## Golden rules (invariants — do not break)
 
@@ -75,8 +90,11 @@ Org-wide (1–9), then this repo's own.
    `LICENSING.md` in the same PR.
 2. **The licence boundary only goes one way.** GPL code may use the dual
    parts; dual code never pulls GPL-only code in: a `core/` file includes only
-   the C++ standard library and other `core/` files (CI checks it), and a dual
-   script imports no GPL-only code. Code coming from AntHocNet keeps its
+   the C++ standard library, other `core/` files and the dual-licensed `core/`
+   of a dependency pinned by commit and declared in the repo's `licence.yml`
+   `core-deps`, with `core-roots` naming the repo's own `core/` (without it
+   the check skips core includes; a protocol's `core/` on swarm-core's; CI
+   checks it, `check-headers.py --core-dep`), and a dual script imports no GPL-only code. Code coming from AntHocNet keeps its
    licence: its `core/`/`tools/` (dual) may land in dual or GPL paths here; its
    `ns3/` modules and `web/` (GPL-2.0-only) only in GPL paths. Third-party code
    (AntHocNet's vendored `aomdv`/`gpsr`, IITP RAS) lands only in GPL paths with
@@ -101,6 +119,11 @@ Org-wide (1–9), then this repo's own.
    carry a configured cap).
 8. **CI hygiene.** Actions pinned by full commit SHA with a `# vX.Y.Z` comment;
    buildx caches scoped per profile; transient artifacts `retention-days` <= 7.
+   Every job that runs steps has a `timeout-minutes` cap (a job that only
+   calls a reusable workflow cannot take one: the called workflow's jobs carry it), and every apt, npm or installer step
+   its own, sized from recent green runs; `apt-get update` runs with
+   `--error-on=any` inside a shell retry. Ubuntu mirror outages are the usual
+   cause of a red run.
 9. **Nothing shipped depends on `.claude/`.** Skills hold procedures; scripts
    that anything shipped needs live in `tools/` (AntHocNet ADR-0014).
 <!-- org-sync:end org-rules -->
@@ -159,6 +182,28 @@ Org-wide (1–9), then this repo's own.
   the commit on `main`, so it is a lowercase Conventional Commit
   (`feat:`/`fix:`/`docs:`/`chore:`/`ci:`…, optional scope).
 - Push with `git push -u origin <branch>`; merge when CI is green.
+- **`main` takes no direct push**, in any repo: its ruleset requires a PR, an
+  up-to-date branch and the required checks. Bots push `bot/<name>` branches
+  and open PRs; a release is the bump PR from `bot/release`, tagged after it
+  merges (CONTRIBUTING "Cutting a release").
+- When a PR falls behind `main`, update it
+  (`gh api -X PUT repos/<owner>/<repo>/pulls/<n>/update-branch`) and merge PRs
+  one at a time, each after its CI on the updated branch. Never force-push a
+  branch someone else pushed. A behind `bot/release` PR is the exception:
+  dispatch the release `bump` again, so the version and changelog are rebuilt
+  on the new `main`.
+- **Settings are code.** Repository settings, rulesets, required checks and the
+  Actions allowlist change only by a PR to the repo's `[settings]` in
+  `.github/org-sync.toml` or to `templates/rulesets/` in `swarm-routing/.github`,
+  never in the UI or by a direct API write. A `templates/rulesets/` change
+  applies on merge; a repo's `[settings]` change applies when `repo-settings`
+  in `swarm-routing/.github` is dispatched with mode `apply` after the merge
+  (the daily run only checks). A required check runs on every PR (no `paths:`
+  filter; skip work inside a gate job instead) and is named exactly as its
+  check run. A new third-party action goes into `defaults.json`
+  `selected_actions` (`templates/rulesets/`) before or with the workflow that
+  uses it: in the same PR in `swarm-routing/.github`, otherwise merged there
+  first, or `repo-settings` refuses the repo.
 <!-- org-sync:end git-workflow -->
 
 <!-- org-sync:begin skills -->
