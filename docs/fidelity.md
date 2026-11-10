@@ -57,8 +57,10 @@ with the four readings below.
 The secondary sources do not agree with each other on two of those readings:
 [AR12] §4.2 has data forwarded stochastically and §4.3 has the initial
 pheromone computed from the hop count, where [R05] pp. 59–60 has deterministic
-forwarding and a constant. [G02] itself settles neither; #15 chose [R05]'s
-reading for both, and the rows below say so.
+forwarding and a constant. [G02] does not settle the forwarding rule, but its
+§3.1 does say the initial pheromone depends on the hop count. #15 chose
+[R05]'s reading for both; the rows below mark the constant as a deviation
+from [G02].
 
 ## Mechanisms
 
@@ -68,11 +70,11 @@ reading for both, and the rows below say so.
 | Routing table entry is the triple (destination, next hop, pheromone ϕ) | [G02] §3.1 | Pheromone table keyed (destination, neighbour); `swarm-core` `PheromoneTable` if it fits | as written |
 | Forward ant (FANT): broadcast by the sender, relayed by every node, unique sequence number | [G02] §3.1, Fig. 2 | FANT carries source, destination, sequence number, hop count; flooded | as written |
 | FANT duplicates (same source and sequence number) are destroyed | [G02] §3.1, §3.4 | Bounded (source, seq) history; later copies dropped without touching the table | as written |
-| A node seeing a FANT for the first time records (FANT source, previous hop, ϕ = f(hops)); one trail toward the source per discovery | [G02] §3.1 | Entry toward the source over the previous hop with a constant initial ϕ (value below) | as written; reading decided in #15: f is a constant, as [R05] p. 59 reads it ([AR12] §4.3 reads it as hop-dependent) |
+| A node seeing a FANT for the first time records (FANT source, previous hop, ϕ = f(hops)); one trail toward the source per discovery | [G02] §3.1 | Entry toward the source over the previous hop with a constant initial ϕ (value below) | deviation: [G02] §3.1 says ϕ depends on the hop count; #15 chose a constant, as [R05] p. 59 reads it ([AR12] §4.3 reads it as hop-dependent, like [G02]) |
 | Destination destroys the FANT and answers with a backward ant (BANT) that lays the trail toward the destination | [G02] §3.1, Fig. 3 | BANT handled like the FANT, roles swapped | as written |
 | How the BANT travels back (unicast along the FANT's path, or flooded) | [G02] §3.1, Fig. 3; [R05] p. 59; [AR12] §4.2 | BANT unicast back along the FANT's recorded path | deviation: [G02] does not say; decided in #15 (both secondaries' reading; a flooded BANT looped in the old arm). Cost: Fig. 3's second trail at node 3 is not reproduced |
 | Data may be sent once the source receives the BANT | [G02] §3.1 | Data starts after the first BANT; what happens to data that arrives before it is the open buffering row below | as written (sending after the BANT); holding data meanwhile is not in [G02] |
-| Data packets waiting for a route (buffering, limits, timeouts) | unknown | To be chosen | unknown: [G02] is silent; [R05] pp. 61–62 lists data buffering as an ARA2 addition |
+| Data packets waiting for a route (buffering, limits, timeouts) | unknown | No ARA2-style data buffering in `core/` (#15); whether the adapter holds or drops a packet until the BANT arrives is to be chosen | unknown: [G02] is silent; [R05] pp. 61–62 lists data buffering as an ARA2 addition, not adopted (#15); adding it later is a default-off switch with its own A/B |
 | Route maintenance by data: the relaying node adds Δϕ to (D, next hop); the next hop adds Δϕ to (S, previous hop) | [G02] §3.2 | Both reinforcements on every data hop | as written |
 | Evaporation by eq. 2, ϕ := (1 − q)·ϕ, applied regularly | [G02] §2.2, eq. 2, §3.2 | Periodic decay with an injected timer port | as written (q and period open, below); [R05] p. 60 also reads 2002 ARA's decay as periodic |
 | A trail decays to zero when no ant or data visits it; the route is then gone | [G02] §3.4 | Entry dropped below an expiry threshold | as written (threshold open, below) |
@@ -155,12 +157,12 @@ Reproducibility with the org's arms: AODV is a stock ns-3 arm in `ns3-tools`'
 `routing-bench`. Its check currently runs on `ns3-dev:3.48` because ns-3.49's
 AODV livelocks (ns3-containers#35), so the anchor run pins 3.48 until that is
 fixed (v2.5.0 ran on 3.42). NRL in the harness counts routing packets per
-delivered data packet at the IP layer, so the gated overhead rule follows
-[G02] Fig. 8's unit (packets); the harness's `nrl_bytes` (control bytes per
-delivered data byte), the nearest to Fig. 6's bits per data bit, is reported,
-not gated. In
-packets the paper shows DSR, not ARA, lowest at high mobility, and AODV well
-above ARA, so the ARA-minus-AODV rule holds in either unit.
+delivered data packet at the IP layer: a ratio, where [G02] Fig. 8 plots the
+total number of routing packets. The NRL gate alone therefore does not
+establish Fig. 8's ordering; the anchor reports the raw routing-packet counts
+next to it. The harness's `nrl_bytes` (control bytes per delivered data byte),
+the nearest to Fig. 6's bits per data bit, is reported, not gated. Fig. 8 has
+DSR, not ARA, lowest at high mobility, and AODV well above ARA.
 
 ## Differences from AntHocNet's `ara` arm
 
