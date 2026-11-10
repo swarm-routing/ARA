@@ -7,7 +7,7 @@ before changing anything. Org-wide conventions:
 
 ## What this repo is
 
-**Status: empty, populated in Phase 3.** The layout below is the plan; update this file in the PR that creates it.
+**Status: `core/` in progress (Phase 3, #5).** Its first slice, route discovery (FANT/BANT, trails, evaporation, next hop, discovery retries, the ant wire header), builds and tests on its own; data forwarding, duplicate errors and route-failure backtracking come next. `ns3/` is still the plan (marked below); update this file in the PR that creates it.
 
 ARA, the Ant-Colony-Based Routing Algorithm (Güneş, Sorges & Bouazizi, 2002),
 as a standalone hexagonal protocol: a simulator-agnostic `core/` and an ns-3
@@ -15,12 +15,30 @@ as a standalone hexagonal protocol: a simulator-agnostic `core/` and an ns-3
 replaces AntHocNet's `ara` comparator arm.
 
 ```
-core/       simulator-agnostic algorithm + unit tests (no ns-3 headers; MIT OR GPL-2.0-only, core/LICENSE)
-ns3/        contrib module `ara` (GPL-2.0-only): header codec, adapter, helper, examples, test suite
+core/       simulator-agnostic algorithm + unit tests (no ns-3 headers; MIT OR GPL-2.0-only, core/LICENSE),
+            on swarm-core's dual-licensed core/ primitives (pinned: SWARM_CORE_REF in core/CMakeLists.txt)
+  ara-ant.*       FANT/BANT and their versioned wire header
+  ara-config.h    the protocol constants, each citing its docs/fidelity.md row
+  ara-router.*    per-node state and decisions (ports in, RouteDecisions out)
+  test/           the core tests (plain CMake + ctest; the ns-3 suite will run the same list)
+ns3/        (planned) contrib module `ara` (GPL-2.0-only): header codec, adapter, helper, examples, test suite
 docs/       fidelity sheet (paper section -> implementation), parameters with sources
+.github/workflows/core.yml   core/ alone: strict warnings, tests, ASan + UBSan, clang-format (check `core`)
 ```
 
 ## Build & verify
+
+`core/` builds and tests alone, with no ns-3 tree (CI: `.github/workflows/core.yml`):
+
+```bash
+make core-test    # cmake -S core -B build/core && cmake --build build/core && ctest --test-dir build/core
+cmake -S core -B build/asan -DARA_CORE_SANITIZE=ON -DSWARM_CORE_DIR=/path/to/ns3-swarm-core/core   # a local swarm-core
+```
+
+It fetches swarm-core at `SWARM_CORE_REF` unless `SWARM_CORE_DIR` names a
+checkout's `core/`; bump the pin together with `core-deps` in
+`.github/workflows/licence.yml` and `SWARM_CORE_REF` in the `Makefile`.
+Once `ns3/` exists:
 
 CI is [`reusable-ns3-ci.yml`](https://github.com/swarm-routing/.github/blob/main/.github/workflows/reusable-ns3-ci.yml):
 the module builds inside `ghcr.io/swarm-routing/ns3-dev:latest-{debug,sanitized}`
