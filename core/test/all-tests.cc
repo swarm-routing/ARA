@@ -10,7 +10,7 @@ namespace ara::core::test {
 
 namespace {
 
-constexpr std::array<NamedTest, 14> kTests{{
+constexpr std::array<NamedTest, 16> kTests{{
     {"ant codec: roundtrip", TestAntRoundtrip},
     {"ant codec: the decoder fails closed", TestAntDecoderFailsClosed},
     {"ant codec: seeded fuzz", TestAntFuzz},
@@ -25,6 +25,8 @@ constexpr std::array<NamedTest, 14> kTests{{
     {"history: 64-entry cap, oldest evicted first", TestHistoryCap},
     {"discovery end to end on a line and a diamond", TestDiscoveryOnALine},
     {"determinism: same seed, same trace", TestDeterminism},
+    {"data: Δϕ toward both ends on every hop", TestDataReinforcement},
+    {"data: one packet a second keeps both trails alive", TestDataKeepsTrailsAlive},
 }};
 
 }  // namespace

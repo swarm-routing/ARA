@@ -1,7 +1,8 @@
 // Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 //
-// Route discovery ([G02] §3.1) and its bookkeeping; see ara-router.h. Each
+// Route discovery ([G02] §3.1), route maintenance by data ([G02] §3.2) and
+// their bookkeeping; see ara-router.h. Each
 // rule names the docs/fidelity.md row it implements.
 #include "ara-router.h"
 
@@ -73,6 +74,23 @@ void Router::layTrail(NodeAddress toward, NodeAddress over, std::uint8_t hops) {
     if (table_.get(toward, over) < initial) {
         table_.set(toward, over, initial);  // refused when full: no trail (org rule 7)
     }
+}
+
+// Fidelity "Route maintenance by data": [G02] §3.2's ϕ := ϕ + Δϕ (eq. 1) on
+// the entry the data packet used, after evaporating to now. Nothing toward
+// this node itself, and nothing over an unknown neighbour.
+void Router::reinforce(NodeAddress toward, NodeAddress over) {
+    if (toward == self_ || toward == kInvalidAddress || over == kInvalidAddress) return;
+    age();
+    table_.add(toward, over, config_.deposit);  // refused when full (org rule 7)
+}
+
+void Router::onDataSent(NodeAddress dest, NodeAddress next) {
+    reinforce(dest, next);
+}
+
+void Router::onDataReceived(NodeAddress source, NodeAddress prev) {
+    reinforce(source, prev);
 }
 
 NodeAddress Router::nextHop(NodeAddress dest) {
