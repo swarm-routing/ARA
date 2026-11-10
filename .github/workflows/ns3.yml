@@ -11,10 +11,10 @@ name: ns-3
 # it so the harness arm (ns3/helper/ara-bench-arms.cc) compiles and runs.
 #
 # core/ also builds alone against swarm-core at SWARM_CORE_REF (core.yml). The
-# `swarm-core pin` job keeps the two in step: it fails when swarm-core main's
-# core/ differs from the pinned commit's, so a change there is met by a pin
-# bump here (core/CMakeLists.txt, Makefile, licence.yml and the core-deps
-# below, all one SHA, which the job also checks).
+# `swarm-core / pin` check (swarm-core-pin.yml) keeps the two in step: it fails
+# when swarm-core main's core/ differs from the pinned commit's, so a change
+# there is met by a pin bump here (core/CMakeLists.txt, Makefile, licence.yml
+# and the core-deps below, all one SHA, which it also checks).
 on:
   push:
     branches: [main]
@@ -63,31 +63,3 @@ jobs:
       contents: read
       id-token: write
     uses: swarm-routing/.github/.github/workflows/reusable-codecov.yml@main
-
-  pin:
-    name: swarm-core pin
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: The pin is one SHA, and swarm-core main's core/ is the pinned core/
-        run: |
-          set -euo pipefail
-          pin=$(sed -n 's/^set(SWARM_CORE_REF "\([0-9a-f]\{40\}\)".*/\1/p' core/CMakeLists.txt)
-          [ -n "$pin" ] || { echo "::error::no SWARM_CORE_REF in core/CMakeLists.txt"; exit 1; }
-          fails=0
-          for f in Makefile .github/workflows/licence.yml .github/workflows/ns3.yml; do
-            grep -q "$pin" "$f" || { echo "::error file=$f::does not name swarm-core $pin (core/CMakeLists.txt's SWARM_CORE_REF)"; fails=1; }
-          done
-          git clone --quiet --filter=blob:none --no-checkout \
-            https://github.com/swarm-routing/ns3-swarm-core.git "$RUNNER_TEMP/swarm-core"
-          main=$(git -C "$RUNNER_TEMP/swarm-core" rev-parse origin/main)
-          if ! git -C "$RUNNER_TEMP/swarm-core" diff --quiet "$pin" "$main" -- core/; then
-            echo "::error::swarm-core main ($main) changed core/ since the pin ($pin): bump SWARM_CORE_REF in core/CMakeLists.txt, Makefile, licence.yml and ns3.yml"
-            git -C "$RUNNER_TEMP/swarm-core" diff --stat "$pin" "$main" -- core/
-            fails=1
-          fi
-          [ "$fails" = 0 ] && echo "ok: core/ at $pin is swarm-core main's ($main)"
-          exit "$fails"

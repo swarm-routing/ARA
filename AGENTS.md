@@ -24,6 +24,7 @@ core/       simulator-agnostic algorithm + unit tests (no ns-3 headers; MIT OR G
 ns3/        (planned) contrib module `ara` (GPL-2.0-only): header codec, adapter, helper, examples, test suite
 docs/       fidelity sheet (paper section -> implementation), parameters with sources
 .github/workflows/core.yml   core/ alone: strict warnings, tests, ASan + UBSan, clang-format (check `core`)
+.github/workflows/swarm-core-pin.yml   the swarm-core pin is one SHA and current (check `swarm-core / pin`)
 ```
 
 ## Build & verify
@@ -39,9 +40,10 @@ It fetches swarm-core at `SWARM_CORE_REF` unless `SWARM_CORE_DIR` names a
 checkout's `core/`; bump the pin together with `core-deps` in
 `.github/workflows/licence.yml` and `.github/workflows/ns3.yml`, and
 `SWARM_CORE_REF` in the `Makefile`. The ns-3 module builds on swarm-core
-`main` instead; ns3.yml's `swarm-core pin` job fails when main's `core/` is no
-longer the pinned one, or when the four places name different SHAs, so a
-swarm-core change is met by a pin bump here.
+`main` instead; the `swarm-core / pin` check (`swarm-core-pin.yml`, on
+swarm-routing/.github's `reusable-swarm-core-pin.yml`) fails when main's
+`core/` is no longer the pinned one, or when the four places name different
+SHAs, so a swarm-core change is met by a pin bump here.
 
 CI for `ns3/` is [`reusable-ns3-ci.yml`](https://github.com/swarm-routing/.github/blob/main/.github/workflows/reusable-ns3-ci.yml):
 the module builds inside `ghcr.io/swarm-routing/ns3-dev:latest-{debug,sanitized}`
