@@ -7,6 +7,11 @@
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue?logo=cplusplus)](AGENTS.md)
 [![Runs on ns-3](https://img.shields.io/badge/runs%20on-ns--3-informational)](https://www.nsnam.org)
 [![Built on: ns3-dev](https://img.shields.io/badge/built%20on-ns3--dev%20image-blue?logo=docker)](https://github.com/orgs/swarm-routing/packages/container/package/ns3-dev)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ARA&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ARA)
+[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ARA&metric=bugs)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ARA)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ARA&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ARA)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ARA&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ARA)
+[![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/swarm-routing/ARA?utm_source=oss&utm_medium=github&utm_campaign=swarm-routing%2FARA&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)](https://coderabbit.ai)
 <!-- org-sync:end badges -->
 
 ARA, the Ant-Colony-Based Routing Algorithm (Güneş, Sorges & Bouazizi, 2002),
