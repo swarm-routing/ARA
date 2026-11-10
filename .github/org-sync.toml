@@ -14,3 +14,12 @@ limitations = """
   relays (blackhole, greyhole). Out of scope, as in AntHocNet before its
   default-off security profile (AntHocNet ADR-0020).
 - A simulation protocol for ns-3, not a network stack for real radios."""
+
+[settings]
+# GitHub settings as code: swarm-routing/.github tools/repo-settings (swarm-routing/.github#117).
+description = "ARA, the Ant-Colony-Based Routing Algorithm (Güneş, Sorges & Bouazizi, 2002), as a standalone swarm routing protocol for MANETs: planned as a simulator-agnostic C++ core and an ns-3 contrib module on swarm-core, with a paper-fidelity sheet."
+homepage = "https://swarm-routing.github.io/arena/ARA/"
+topics = ["ara", "ant-colony-optimization", "aco", "swarm-intelligence", "manet", "ad-hoc-routing", "routing-protocol", "ns-3", "network-simulation"]
+ruleset = "protocol"
+# The PR-title and licence checks are added here once this repository runs them (swarm-routing/.github#117).
+required_checks = ["check / org-sync"]
