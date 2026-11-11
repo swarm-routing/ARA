@@ -25,6 +25,7 @@ core/       simulator-agnostic algorithm + unit tests (no ns-3 headers; MIT OR G
 ns3/        (planned) contrib module `ara` (GPL-2.0-only): header codec, adapter, helper, examples, test suite
 docs/       fidelity sheet (paper section -> implementation), parameters with sources
 .github/workflows/core.yml   core/ alone: strict warnings, tests, ASan + UBSan, clang-format (check `core`)
+.github/workflows/swarm-core-pin.yml   the swarm-core pin is one SHA and current (check `swarm-core / pin`)
 ```
 
 ## Build & verify
@@ -40,9 +41,10 @@ It fetches swarm-core at `SWARM_CORE_REF` unless `SWARM_CORE_DIR` names a
 checkout's `core/`; bump the pin together with `core-deps` in
 `.github/workflows/licence.yml` and `.github/workflows/ns3.yml`, and
 `SWARM_CORE_REF` in the `Makefile`. The ns-3 module builds on swarm-core
-`main` instead; ns3.yml's `swarm-core pin` job fails when main's `core/` is no
-longer the pinned one, or when the four places name different SHAs, so a
-swarm-core change is met by a pin bump here.
+`main` instead; the `swarm-core / pin` check (`swarm-core-pin.yml`, on
+swarm-routing/.github's `reusable-swarm-core-pin.yml`) fails when main's
+`core/` is no longer the pinned one, or when the four places name different
+SHAs, so a swarm-core change is met by a pin bump here.
 
 CI for `ns3/` is [`reusable-ns3-ci.yml`](https://github.com/swarm-routing/.github/blob/main/.github/workflows/reusable-ns3-ci.yml):
 the module builds inside `ghcr.io/swarm-routing/ns3-dev:latest-{debug,sanitized}`
@@ -86,16 +88,21 @@ Org-wide (1–9), then this repo's own.
    `.h`/`.hpp`/`.cc`/`.cpp`/`.py`/`.sh` starts with
    `// Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)` +
    `// SPDX-License-Identifier: <MIT OR GPL-2.0-only | GPL-2.0-only>` (`#`
-   comments where needed), matching its directory in `LICENSING.md`. CI
-   (`reusable-licence-check.yml`) checks it. A new directory gets its row in
-   `LICENSING.md` in the same PR.
+   comments where needed), matching its directory in `LICENSING.md`; an
+   outside contributor may add their own `Copyright (c) <year> <Name>` line
+   beneath the org line, never replace it, and signs off every commit (DCO,
+   CONTRIBUTING "Outside contributions"). CI (`reusable-licence-check.yml`)
+   checks it. A new directory gets its row in `LICENSING.md` in the same PR.
 2. **The licence boundary only goes one way.** GPL code may use the dual
    parts; dual code never pulls GPL-only code in: a `core/` file includes only
    the C++ standard library, other `core/` files and the dual-licensed `core/`
-   of a dependency pinned by commit and declared in the repo's `licence.yml`
-   `core-deps`, with `core-roots` naming the repo's own `core/` (without it
-   the check skips core includes; a protocol's `core/` on swarm-core's; CI
-   checks it, `check-headers.py --core-dep`), and a dual script imports no GPL-only code. Code coming from AntHocNet keeps its
+   of a dependency pinned by commit and declared as the `core-deps` input of
+   every workflow that runs the licence check (one calling
+   `reusable-licence-check.yml`, or one calling `reusable-ns3-ci.yml`, which
+   forwards it; workflow file names differ per repo), each with the same pin,
+   with `core-roots` naming the repo's own `core/`
+   (without it the check skips core includes; a protocol's `core/` on
+   swarm-core's; CI checks it, `check-headers.py --core-dep`), and a dual script imports no GPL-only code. Code coming from AntHocNet keeps its
    licence: its `core/`/`tools/` (dual) may land in dual or GPL paths here; its
    `ns3/` modules and `web/` (GPL-2.0-only) only in GPL paths. Third-party code
    (AntHocNet's vendored `aomdv`/`gpsr`, IITP RAS) lands only in GPL paths with
@@ -188,8 +195,8 @@ Org-wide (1–9), then this repo's own.
   and open PRs; a release is the bump PR from `bot/release`, tagged after it
   merges (CONTRIBUTING "Cutting a release").
 - When a PR falls behind `main`, update it
-  (`gh api -X PUT repos/<owner>/<repo>/pulls/<n>/update-branch`) and merge PRs
-  one at a time, each after its CI on the updated branch. Never force-push a
+  (`gh api -X PUT "repos/<owner>/<repo>/pulls/<n>/update-branch"`, with
+  `<owner>/<repo>` the PR's base repository and `<n>` its number) and merge PRs one at a time, each after its CI on the updated branch. Never force-push a
   branch someone else pushed. A behind `bot/release` PR is the exception:
   dispatch the release `bump` again, so the version and changelog are rebuilt
   on the new `main`.
