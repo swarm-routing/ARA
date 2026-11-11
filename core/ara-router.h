@@ -13,7 +13,11 @@
 // The router never touches a simulator (golden rule 10). Time, randomness and
 // deferred work come through swarm-core's ports; every ant it sends leaves
 // through the Sink as a swarm-core RouteDecision, which the adapter carries
-// out. A fixed seed of the injected IRng gives byte-identical behaviour (org
+// out. An optional swarm-core IRouterObserver (setObserver) is told what the
+// router sends and receives, which routes it adds and drops, what it decides
+// for data and how big its trail table is; it only reads, so a run is the same
+// with or without one (org rule 5; test-observer.cc). A slice that adds a
+// control message or a table write reports it through the same helpers. A fixed seed of the injected IRng gives byte-identical behaviour (org
 // rule 5): the only draw is the relay jitter, one uniform() per relayed FANT.
 #ifndef ARA_CORE_ROUTER_H
 #define ARA_CORE_ROUTER_H
@@ -21,6 +25,7 @@
 #include "ara-ant.h"
 #include "ara-config.h"
 #include "swarm-dedup-history.h"
+#include "swarm-observer.h"
 #include "swarm-pheromone-table.h"
 #include "swarm-ports.h"
 #include "swarm-route-decision.h"
@@ -30,7 +35,9 @@
 #include <deque>
 #include <functional>
 #include <map>
+#include <optional>
 #include <utility>
+#include <vector>
 
 namespace ara::core {
 
@@ -55,6 +62,12 @@ public:
     /// waiting for a route"), and either a discovery starts or, while one
     /// runs, the packet counts as demand for its next retry (#5).
     AntDecision onLocalData(NodeAddress dest);
+
+    /// A data packet for `dest` that arrived from a neighbour and is not this
+    /// node's own: Deliver when `dest` is this node, else Unicast to the next
+    /// trail or Drop when there is none (no buffering). Like nextHop(), plus
+    /// the report to the observer.
+    AntDecision onTransitData(NodeAddress dest);
 
     /// Route maintenance by data ([G02] §3.2, fidelity "Route maintenance by
     /// data"): this node, the source or a relay, hands a data packet for
@@ -85,6 +98,16 @@ public:
 
     NodeAddress self() const { return self_; }
 
+    /// Reports to `observer` from now on (null: none, the default; one pointer
+    /// check per event). The observer must outlive the router. The trail
+    /// table's size is reported again at its next change.
+    void setObserver(swarm::core::IRouterObserver* observer);
+
+    /// What one trail table entry takes: the destination and the neighbour
+    /// address and the pheromone value (the payload, not the map's nodes).
+    static constexpr std::uint32_t kTrailEntryBytes =
+        static_cast<std::uint32_t>(2 * sizeof(NodeAddress) + sizeof(double));
+
 private:
     struct Discovery {
         std::uint32_t sequence = 0;  ///< of the latest FANT
@@ -111,6 +134,14 @@ private:
     };
 
     void age();
+    /// The sink, after telling the observer (an ant is kAntWireSize bytes).
+    void emit(const AntDecision& decision);
+    /// Table writes that tell the observer of a new entry and a new size.
+    void setTrail(NodeAddress dest, NodeAddress over, double value);
+    void addTrail(NodeAddress dest, NodeAddress over, double delta);
+    void trailWritten(NodeAddress dest, NodeAddress over, bool existed);
+    void reportState();
+    AntDecision decided(AntDecision decision, NodeAddress dest);
     NodeAddress bestHop(NodeAddress dest) const;
     void layTrail(NodeAddress toward, NodeAddress over, std::uint8_t hops);
     void reinforce(NodeAddress toward, NodeAddress over);
@@ -135,6 +166,8 @@ private:
     std::map<NodeAddress, Discovery> discoveries_;
     std::uint32_t nextSequence_ = 1;
     Time lastAged_;
+    swarm::core::IRouterObserver* observer_ = nullptr;
+    std::optional<std::size_t> reportedEntries_;  ///< table size the observer last heard
 };
 
 }  // namespace ara::core
