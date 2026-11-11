@@ -100,8 +100,9 @@ flowchart TB
 
 ## Infrastructure track
 
-CI, packaging and tooling items ride along under the release they should ship
-with, carry its label when they are scheduled, and never gate a release. The
+CI, packaging and tooling items ride along with whichever release is cut
+next, carry no `release:` label (that label is reserved for issues a release
+gates), and never gate a release. The
 checks and adapter coverage of [#41](https://github.com/swarm-routing/ARA/issues/41)
 are the example: done, and not an exit criterion.
 
