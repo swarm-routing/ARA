@@ -1,5 +1,6 @@
 # Citation File Format (https://citation-file-format.github.io), seeded by
-# swarm-routing/.github org-sync (`citation = true`); the repository's own once
+# swarm-routing/.github org-sync (`citation = true`; `citation_type` and
+# `[[references]]` in .github/org-sync.toml); the repository's own once
 # written. Commitizen keeps `version:` in step (`.cz.toml` version_files
 # "CITATION.cff:^version:"); swarm-routing/.github tools/zenodo reads the
 # concept DOI from `doi:` once the first release is archived on Zenodo.
@@ -26,3 +27,22 @@ identifiers:
   - type: doi
     value: "10.5281/zenodo.24125198"
     description: "Concept DOI: always resolves to the latest released version."
+references:
+  - type: conference-paper
+    title: "ARA-the ant-colony based routing algorithm for MANETs"
+    authors:
+      - family-names: "Güneş"
+        given-names: "M."
+      - family-names: "Sorges"
+        given-names: "U."
+      - family-names: "Bouazizi"
+        given-names: "I."
+    collection-title: "Proceedings. International Conference on Parallel Processing Workshop"
+    collection-type: proceedings
+    start: "79"
+    end: "85"
+    year: 2002
+    publisher:
+      name: "IEEE"
+    doi: "10.1109/ICPPW.2002.1039715"
+    notes: "The algorithm this repository implements; every parameter in docs/fidelity.md cites it."
