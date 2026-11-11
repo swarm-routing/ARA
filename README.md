@@ -49,7 +49,7 @@ Each release also has its own **version DOI**, listed on [its Zenodo record](htt
 
 Please also cite the work it builds on:
 
-- M. Güneş, U. Sorges, I. Bouazizi, *ARA-the ant-colony based routing algorithm for MANETs*, Proceedings. International Conference on Parallel Processing Workshop, pp. 79–85, 2002, [doi:10.1109/ICPPW.2002.1039715](https://doi.org/10.1109/ICPPW.2002.1039715). The algorithm this repository implements; every parameter in docs/fidelity.md cites it.
+- M. Güneş, U. Sorges, I. Bouazizi, *ARA-the ant-colony based routing algorithm for MANETs*, Proceedings. International Conference on Parallel Processing Workshop, pp. 79–85, 2002, [doi:10.1109/ICPPW.2002.1039715](https://doi.org/10.1109/ICPPW.2002.1039715). The algorithm this repository implements; docs/fidelity.md maps each of its sections to the code and marks the repository choices.
 
 What this implementation reproduces from its sources, and every deliberate deviation, is in [docs/fidelity.md](docs/fidelity.md).
 
