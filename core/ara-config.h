@@ -25,6 +25,9 @@ struct Config {
     double evaporationRate = 0.1;
     /// Fidelity "Evaporation period": 1 s, evaluated continuously (#4).
     Time evaporationPeriod = 1.0;
+    /// Fidelity "Deposit Δϕ per data packet": 0.1 (#4). [G02] §3.2's route
+    /// maintenance adds it on every data hop, toward both ends.
+    double deposit = 0.1;
     /// Fidelity "Route-expiry threshold": an entry below 0.01 is gone (#4).
     double expiryThreshold = 0.01;
     /// Fidelity "FANT maximum hops / TTL": 35; the BANT carries the same (#4).

@@ -26,6 +26,8 @@ void TestRetryLimitAndDoubling(Checker& c);
 void TestHistoryCap(Checker& c);
 void TestDiscoveryOnALine(Checker& c);
 void TestDeterminism(Checker& c);
+void TestDataReinforcement(Checker& c);
+void TestDataKeepsTrailsAlive(Checker& c);
 
 struct NamedTest {
     const char* name;

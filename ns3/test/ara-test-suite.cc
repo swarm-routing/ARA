@@ -9,7 +9,8 @@
 //   the decoder a received control payload goes through (org rule 3);
 // - the adapter on a static four-node 802.11b chain: a FANT flood, the BANT
 //   back, data delivered over the trail, the packet sent before the trail
-//   dropped rather than held (fidelity "Data packets waiting for a route");
+//   dropped rather than held (fidelity "Data packets waiting for a route"),
+//   and data keeping that trail alive past its expiry ([G02] §3.2);
 // - determinism: the same seed gives the same ant and delivery trace, another
 //   seed another (org rule 5);
 // - the adapter's guards: no core before the protocol starts, broadcast and
@@ -331,6 +332,25 @@ private:
     }
 };
 
+class MaintenanceTestCase : public TestCase {
+public:
+    MaintenanceTestCase()
+        : TestCase("adapter: data keeps the trail alive past its expiry ([G02] §3.2)") {}
+
+private:
+    void DoRun() override {
+        // 80 packets, one every 0.5 s from t = 1 s to 40.5 s. The discovery's
+        // trail at node 0 is 1/3 (three hops), which unvisited falls below the
+        // 0.01 expiry about 33 s later; each packet adds Δϕ on every hop.
+        const ChainRun r = Chain().Run(1, 80);
+        NS_TEST_ASSERT_MSG_EQ(r.sent, 80u, "packets sent");
+        NS_TEST_EXPECT_MSG_EQ(r.received, 79u, "every packet after the discovery delivered");
+        NS_TEST_EXPECT_MSG_EQ(r.queue0.enqueued, 1u, "only the first packet found no trail");
+        NS_TEST_EXPECT_MSG_EQ(r.nextHop0, r.expect0, "node 0 still routes over node 1");
+        NS_TEST_EXPECT_MSG_EQ(r.nextHop1, r.expect1, "node 1 still routes over node 2");
+    }
+};
+
 class DeterminismTestCase : public TestCase {
 public:
     DeterminismTestCase() : TestCase("determinism: same seed same trace, another seed another") {}
@@ -450,6 +470,7 @@ public:
         AddTestCase(new HeaderFuzzTestCase, TestCase::Duration::QUICK);
         AddTestCase(new HeaderPrintTestCase, TestCase::Duration::QUICK);
         AddTestCase(new ChainDeliveryTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new MaintenanceTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DeterminismTestCase, TestCase::Duration::QUICK);
         AddTestCase(new AdapterGuardsTestCase, TestCase::Duration::QUICK);
     }

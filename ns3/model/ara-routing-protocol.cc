@@ -83,6 +83,25 @@ void RoutingProtocol::StartDiscovery(Ipv4Address dst) {
     DiscardDeferred(dst);
 }
 
+bool RoutingProtocol::OnDataReceived(Ptr<const Packet> /*p*/, const Ipv4Header& header,
+                                     Ipv4Address prev) {
+    // [G02] §3.2: the next hop strengthens the trail toward the source.
+    if (m_router) {
+        m_router->onDataReceived(ToNodeAddress(header.GetSource()), ToNodeAddress(prev));
+    }
+    return true;
+}
+
+void RoutingProtocol::OnDataForwarded(Ptr<const Packet> p, const Ipv4Header& header,
+                                      Ipv4Address next) {
+    // [G02] §3.2: the node handing data to `next` strengthens (D, next).
+    // RouteOutput can be asked for a route with no packet (a socket probing
+    // its source address): no data moves then, so nothing is deposited.
+    if (m_router && p) {
+        m_router->onDataSent(ToNodeAddress(header.GetDestination()), ToNodeAddress(next));
+    }
+}
+
 void RoutingProtocol::RecvControl(Ptr<Packet> p, Ipv4Address from, Ipv4Address /*receiver*/) {
     if (!m_router) return;
     const auto ant = DecodeAntPacket(p);
