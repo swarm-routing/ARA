@@ -12,7 +12,9 @@
 //   dropped rather than held (fidelity "Data packets waiting for a route"),
 //   and data keeping that trail alive past its expiry ([G02] §3.2);
 // - determinism: the same seed gives the same ant and delivery trace, another
-//   seed another (org rule 5).
+//   seed another (org rule 5);
+// - the adapter's guards: no core before the protocol starts, broadcast and
+//   multicast data not routed, a malformed control payload ignored (#41).
 // Through the include path (core/, resolved past the contrib link), not
 // "../../core/...": gcov would collapse that beside the link, not its target.
 #include "test/ara-core-tests.h"
@@ -169,9 +171,58 @@ private:
     }
 };
 
+class HeaderPrintTestCase : public TestCase {
+public:
+    HeaderPrintTestCase() : TestCase("header: Print names the ant, or says it is invalid") {}
+
+private:
+    void DoRun() override {
+        std::ostringstream fant;
+        ns3::ara::AntHeader(AntMessage{AntType::Forward, 1, 4, 7, 2, 33}).Print(fant);
+        NS_TEST_EXPECT_MSG_EQ(fant.str(), std::string("FANT src=1 dst=4 seq=7 hops=2 ttl=33"),
+                              "a FANT");
+        std::ostringstream bant;
+        ns3::ara::AntHeader(AntMessage{AntType::Backward, 4, 1, 7, 0, 35}).Print(bant);
+        NS_TEST_EXPECT_MSG_EQ(bant.str(), std::string("BANT src=4 dst=1 seq=7 hops=0 ttl=35"),
+                              "a BANT");
+        // Bytes that do not decode (a short buffer) print as invalid.
+        ns3::ara::AntHeader h;
+        Create<Packet>(3)->RemoveHeader(h);
+        std::ostringstream bad;
+        h.Print(bad);
+        NS_TEST_EXPECT_MSG_EQ(bad.str(), std::string("invalid ant"), "undecodable bytes");
+    }
+};
+
 // --- the adapter on a chain ------------------------------------------------------
 
 constexpr uint16_t kDataPort = 9;
+
+/// Places `nodes` on a line 200 m apart, each reaching only its neighbours
+/// (250 m range), on 802.11b at 2 Mbit/s.
+NetDeviceContainer LineOfWifiNodes(NodeContainer& nodes) {
+    MobilityHelper mobility;
+    Ptr<ListPositionAllocator> pos = CreateObject<ListPositionAllocator>();
+    for (uint32_t i = 0; i < nodes.GetN(); ++i)
+        pos->Add(Vector(200.0 * i, 0.0, 0.0));
+    mobility.SetPositionAllocator(pos);
+    mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+    mobility.Install(nodes);
+
+    WifiHelper wifi;
+    wifi.SetStandard(WIFI_STANDARD_80211b);
+    wifi.SetRemoteStationManager("ns3::ConstantRateWifiManager", "DataMode",
+                                 StringValue("DsssRate2Mbps"), "ControlMode",
+                                 StringValue("DsssRate1Mbps"));
+    YansWifiChannelHelper channel;
+    channel.SetPropagationDelay("ns3::ConstantSpeedPropagationDelayModel");
+    channel.AddPropagationLoss("ns3::RangePropagationLossModel", "MaxRange", DoubleValue(250.0));
+    YansWifiPhyHelper phy;
+    phy.SetChannel(channel.Create());
+    WifiMacHelper mac;
+    mac.SetType("ns3::AdhocWifiMac");
+    return wifi.Install(phy, mac, nodes);
+}
 
 /// What one chain run observed.
 struct ChainRun {
@@ -193,28 +244,7 @@ public:
         SwarmCoreSeed(seed);
         NodeContainer nodes;
         nodes.Create(4);
-        MobilityHelper mobility;
-        Ptr<ListPositionAllocator> pos = CreateObject<ListPositionAllocator>();
-        for (uint32_t i = 0; i < 4; ++i)
-            pos->Add(Vector(200.0 * i, 0.0, 0.0));
-        mobility.SetPositionAllocator(pos);
-        mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
-        mobility.Install(nodes);
-
-        WifiHelper wifi;
-        wifi.SetStandard(WIFI_STANDARD_80211b);
-        wifi.SetRemoteStationManager("ns3::ConstantRateWifiManager", "DataMode",
-                                     StringValue("DsssRate2Mbps"), "ControlMode",
-                                     StringValue("DsssRate1Mbps"));
-        YansWifiChannelHelper channel;
-        channel.SetPropagationDelay("ns3::ConstantSpeedPropagationDelayModel");
-        channel.AddPropagationLoss("ns3::RangePropagationLossModel", "MaxRange",
-                                   DoubleValue(250.0));
-        YansWifiPhyHelper phy;
-        phy.SetChannel(channel.Create());
-        WifiMacHelper mac;
-        mac.SetType("ns3::AdhocWifiMac");
-        NetDeviceContainer devs = wifi.Install(phy, mac, nodes);
+        NetDeviceContainer devs = LineOfWifiNodes(nodes);
 
         AraHelper ara;
         ara.Install(nodes);
@@ -338,6 +368,98 @@ private:
     }
 };
 
+// --- the adapter's guards, through its hooks --------------------------------------
+
+/// ns3::ara::RoutingProtocol with its protected hooks callable from a test.
+class ProbeProtocol : public ns3::ara::RoutingProtocol {
+public:
+    static TypeId GetTypeId();
+    /// SelectNextHop for data to `dst` that arrived from `prev`.
+    Ipv4Address Select(Ipv4Address dst, Ipv4Address prev) {
+        return SelectNextHop(dst, Ipv4Address(), prev, nullptr);
+    }
+    /// RecvControl of a payload from the one-hop neighbour `from`.
+    void Control(Ptr<Packet> p, Ipv4Address from) { RecvControl(p, from, Ipv4Address()); }
+};
+
+NS_OBJECT_ENSURE_REGISTERED(ProbeProtocol);
+
+TypeId ProbeProtocol::GetTypeId() {
+    static TypeId tid = TypeId("ns3::aratest::ProbeProtocol")
+                            .SetParent<ns3::ara::RoutingProtocol>()
+                            .SetGroupName("Ara")
+                            .AddConstructor<ProbeProtocol>();
+    return tid;
+}
+
+class AdapterGuardsTestCase : public TestCase {
+public:
+    AdapterGuardsTestCase()
+        : TestCase("adapter: idle protocol, broadcast and multicast data, malformed ants") {}
+
+private:
+    void DoRun() override {
+        const Ipv4Address far("10.1.0.99");
+        std::vector<uint8_t> fant;
+        ::ara::core::encodeAnt({AntType::Forward, 0x0A010002, 0x0A010063, 7, 0, 35}, fant);
+
+        // Before the protocol starts there is no core: no route, no discovery,
+        // and a control payload is ignored.
+        Ptr<ProbeProtocol> idle = CreateObject<ProbeProtocol>();
+        NS_TEST_EXPECT_MSG_EQ(idle->NextHop(far), Ipv4Address(), "idle: no next hop");
+        NS_TEST_EXPECT_MSG_EQ(idle->Select(far, Ipv4Address()), Ipv4Address(),
+                              "idle: nothing selected");
+        idle->Control(FromBytes(fant), Ipv4Address("10.1.0.2"));
+
+        // Two neighbours, both running the probe (node 0 at 10.1.0.1).
+        SwarmCoreSeed(1);
+        NodeContainer nodes;
+        nodes.Create(2);
+        NetDeviceContainer devs = LineOfWifiNodes(nodes);
+        SwarmRoutingHelper probe("ns3::aratest::ProbeProtocol");
+        probe.Install(nodes);
+        Ipv4AddressHelper a;
+        a.SetBase("10.1.0.0", "255.255.255.0");
+        Ipv4InterfaceContainer ifs = a.Assign(devs);
+        probe.AssignStreams(nodes, 0);
+        Ptr<ProbeProtocol> p0 = nodes.Get(0)->GetObject<ProbeProtocol>();
+        p0->TraceConnectWithoutContext("AntTx", MakeCallback(&AdapterGuardsTestCase::AntTx, this));
+        const Ipv4Address n1 = ifs.GetAddress(1);
+
+        Simulator::Schedule(Seconds(0.5), [&]() {
+            // Broadcast and multicast data are not routed, and start no discovery.
+            NS_TEST_EXPECT_MSG_EQ(p0->Select(Ipv4Address::GetBroadcast(), Ipv4Address()),
+                                  Ipv4Address(), "broadcast data");
+            NS_TEST_EXPECT_MSG_EQ(p0->Select(Ipv4Address("224.0.0.1"), Ipv4Address()),
+                                  Ipv4Address(), "multicast data");
+            // A malformed payload changes nothing (a wrong version, then a
+            // short one); the valid FANT after it lays a trail and is relayed.
+            std::vector<uint8_t> wrong = fant;
+            wrong[0] = ::ara::core::kAntWireVersion + 1;
+            p0->Control(FromBytes(wrong), n1);
+            p0->Control(Create<Packet>(3), n1);
+            NS_TEST_EXPECT_MSG_EQ(p0->NextHop(n1), Ipv4Address(), "no trail from a bad ant");
+            p0->Control(FromBytes(fant), n1);
+            NS_TEST_EXPECT_MSG_EQ(p0->NextHop(n1), n1, "the valid FANT laid its trail");
+        });
+        Simulator::Stop(Seconds(1.0));
+        Simulator::Run();
+        Simulator::Destroy();
+        // Only the valid FANT's relay was sent: no discovery for the broadcast
+        // or multicast packet, nothing for the malformed ants.
+        NS_TEST_EXPECT_MSG_EQ(m_tx.size(), 1u, "one ant sent by node 0");
+        if (!m_tx.empty()) {
+            NS_TEST_EXPECT_MSG_EQ(m_tx[0], std::string("type=1 bcast"), "the FANT relay");
+        }
+    }
+
+    void AntTx(uint8_t type, bool broadcast) {
+        m_tx.push_back("type=" + std::to_string(type) + (broadcast ? " bcast" : " ucast"));
+    }
+
+    std::vector<std::string> m_tx;
+};
+
 class AraTestSuite : public TestSuite {
 public:
     AraTestSuite() : TestSuite("ara", Type::UNIT) {
@@ -346,9 +468,11 @@ public:
         }
         AddTestCase(new HeaderRoundtripTestCase, TestCase::Duration::QUICK);
         AddTestCase(new HeaderFuzzTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new HeaderPrintTestCase, TestCase::Duration::QUICK);
         AddTestCase(new ChainDeliveryTestCase, TestCase::Duration::QUICK);
         AddTestCase(new MaintenanceTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DeterminismTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new AdapterGuardsTestCase, TestCase::Duration::QUICK);
     }
 };
 
