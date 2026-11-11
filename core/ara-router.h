@@ -63,8 +63,10 @@ public:
 
     /// The other half: a data packet from `source` arrived from the neighbour
     /// `prev` (at a relay or at the destination), which adds Δϕ to
-    /// (source, prev). A deposit on a missing entry creates it at Δϕ (the
-    /// proposed reading on #5); the table's cap refuses it when full.
+    /// (source, prev). A deposit on a missing entry creates it at Δϕ (a
+    /// reading accepted by the maintainer on 2026-11-11,
+    /// https://github.com/swarm-routing/ARA/issues/5#issuecomment-6783812825);
+    /// the table's cap refuses it when full.
     void onDataReceived(NodeAddress source, NodeAddress prev);
 
     /// An ant arrived from the one-hop neighbour `from`.
