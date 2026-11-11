@@ -269,4 +269,5 @@ here is undone by the next `org_sync.py apply`).
 | Benchmark against AODV/OLSR/AntHocNet | `swarm-routing/ns3-tools` arenas, results into `swarm-routing/benchmarks` |
 | The org's invariants, labels, issue shape | [`swarm-routing/.github` CONTRIBUTING.md](https://github.com/swarm-routing/.github/blob/main/CONTRIBUTING.md) |
 | The reference implementation and its history | [`danieljoppi/AntHocNet`](https://github.com/danieljoppi/AntHocNet) (`AGENTS.md`, `CONTEXT.md`, `docs/adr/`) |
+| Know which release a piece of work serves, or why something is not planned | [`docs/roadmap.md`](docs/roadmap.md): the release ladder v0.2.0 → v1.0.0, exit criteria, non-goals; issues carry `release:` labels |
 | Pick up open work | this repo's issues — highest open `priority:P*` first; newest open `handoff` issue for work in flight |
