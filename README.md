@@ -11,6 +11,7 @@
 [![Bugs](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ARA&metric=bugs)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ARA)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ARA&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ARA)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ARA&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ARA)
+[![codecov](https://codecov.io/gh/swarm-routing/ARA/graph/badge.svg)](https://codecov.io/gh/swarm-routing/ARA)
 [![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/swarm-routing/ARA?utm_source=oss&utm_medium=github&utm_campaign=swarm-routing%2FARA&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)](https://coderabbit.ai)
 <!-- org-sync:end badges -->
 
@@ -22,6 +23,8 @@ the org's Phase 3; route discovery, the first slice of `core/`, runs in ns-3
 as the module `ara` (header codec, adapter, helper, example, `test.py -s ara`,
 and the `ara` arm of ns3-tools' `routing-compare`); data reinforcement,
 duplicate errors and route-failure backtracking follow, then the anchor.
+
+**Release status:** the first release, v0.1.0, comes before the comparator gates (maintainer decision 2026-11-10): it has **not** cleared them (org golden rule 6: fidelity sheet, per-PR delivery smoke, anchor). The anchor is pending, so no number from v0.1.0 counts as a benchmark result. The gated release is proposed as v0.2.0. Releases are cut by [`release.yml`](https://github.com/swarm-routing/ARA/blob/main/.github/workflows/release.yml) and listed under [Releases](https://github.com/swarm-routing/ARA/releases).
 
 How to work here, for people and AI agents alike: [AGENTS.md](AGENTS.md) has
 the rules and how to build and verify; the org conventions are in

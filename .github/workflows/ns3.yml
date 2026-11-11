@@ -19,6 +19,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  merge_group:  # its checks are required, so the merge queue runs them too (swarm-routing/.github#130)
   workflow_dispatch:
     inputs:
       ns3-versions:
