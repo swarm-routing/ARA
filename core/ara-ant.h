@@ -23,8 +23,10 @@
 #ifndef ARA_CORE_ANT_H
 #define ARA_CORE_ANT_H
 
+#include "swarm-observer.h"
 #include "swarm-types.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -55,6 +57,15 @@ struct AntMessage {
 
     bool operator==(const AntMessage&) const = default;
 };
+
+/// The names of the control kinds, keyed by the wire type byte, so readers of
+/// swarm-core's router observer print "FANT", not "1". An adapter registers it
+/// once with SwarmRoutingBase::SetKindNames. A kind added to AntType (the
+/// duplicate and route errors, [G02] §3.2, §3.3) is added here too.
+inline constexpr std::array<swarm::core::KindName, 2> kAntKindNames{{
+    {static_cast<std::uint8_t>(AntType::Forward), "FANT"},
+    {static_cast<std::uint8_t>(AntType::Backward), "BANT"},
+}};
 
 /// Appends the ant's kAntWireSize bytes to `out`.
 void encodeAnt(const AntMessage& ant, std::vector<std::uint8_t>& out);

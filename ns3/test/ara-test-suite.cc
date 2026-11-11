@@ -13,6 +13,8 @@
 //   and data keeping that trail alive past its expiry ([G02] §3.2);
 // - determinism: the same seed gives the same ant and delivery trace, another
 //   seed another (org rule 5);
+// - the router observer: the same seed gives a byte-identical run with its
+//   trace sources connected, and they agree with the counters (ARA#49);
 // - the adapter's guards: no core before the protocol starts, broadcast and
 //   multicast data not routed, a malformed control payload ignored (#41).
 // Through the include path (core/, resolved past the contrib link), not
@@ -35,6 +37,7 @@
 #include "ns3/yans-wifi-helper.h"
 
 #include <cstdint>
+#include <map>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -236,11 +239,25 @@ struct ChainRun {
     Ipv4Address expect0;   ///< node 1's address
     Ipv4Address expect1;   ///< node 2's address
     DeferredQueueStats queue0;
+    // The router observer: the trace sources' own tallies, and the counters.
+    uint64_t ctlTx = 0;
+    uint64_t ctlTxBytes = 0;
+    uint64_t ctlRx = 0;
+    uint64_t routeAdds = 0;
+    uint64_t routeRemoves = 0;
+    std::map<int, uint64_t> decisions;  ///< by RouteAction
+    uint64_t stateReports = 0;
+    uint32_t lastEntries = 0;
+    swarm::core::RouterStats stats;  ///< SwarmRoutingHelper::CollectStats' aggregate
+    std::string fantName;
+    std::string bantName;
 };
 
 class Chain {
 public:
-    ChainRun Run(uint32_t seed, uint32_t packets) {
+    /// `observe` connects the router observer's trace sources, which must not
+    /// change the run (org rule 5).
+    ChainRun Run(uint32_t seed, uint32_t packets, bool observe = false) {
         SwarmCoreSeed(seed);
         NodeContainer nodes;
         nodes.Create(4);
@@ -261,6 +278,18 @@ public:
             Proto(nodes.Get(i))
                 ->TraceConnect("AntTx", std::to_string(i), MakeCallback(&Chain::AntTx, this));
         }
+        if (observe) {
+            for (uint32_t i = 0; i < 4; ++i) {
+                Ptr<ns3::ara::RoutingProtocol> p = Proto(nodes.Get(i));
+                p->TraceConnectWithoutContext("ControlTx", MakeCallback(&Chain::ControlTx, this));
+                p->TraceConnectWithoutContext("ControlRx", MakeCallback(&Chain::ControlRx, this));
+                p->TraceConnectWithoutContext("RouteChanged",
+                                              MakeCallback(&Chain::RouteChanged, this));
+                p->TraceConnectWithoutContext("DataDecision",
+                                              MakeCallback(&Chain::DataDecision, this));
+                p->TraceConnectWithoutContext("StateSize", MakeCallback(&Chain::StateSize, this));
+            }
+        }
         Ptr<Socket> sink = Socket::CreateSocket(nodes.Get(3), UdpSocketFactory::GetTypeId());
         sink->Bind(InetSocketAddress(Ipv4Address::GetAny(), kDataPort));
         sink->SetRecvCallback(MakeCallback(&Chain::Receive, this));
@@ -276,6 +305,9 @@ public:
         m_run.expect0 = ifs.GetAddress(1);
         m_run.expect1 = ifs.GetAddress(2);
         m_run.queue0 = Proto(nodes.Get(0))->GetDeferredQueue()->Stats();
+        m_run.stats = SwarmRoutingHelper::CollectStats(nodes).aggregate;
+        m_run.fantName = ara.KindName(static_cast<uint8_t>(AntType::Forward));
+        m_run.bantName = ara.KindName(static_cast<uint8_t>(AntType::Backward));
         m_src = nullptr;
         Simulator::Destroy();
         return m_run;
@@ -291,6 +323,21 @@ private:
         os << Simulator::Now().GetNanoSeconds() << " n" << node << " tx type=" << int{type}
            << (broadcast ? " bcast" : " ucast");
         m_run.trace.push_back(os.str());
+    }
+    void ControlTx(uint8_t, bool, uint32_t bytes) {
+        ++m_run.ctlTx;
+        m_run.ctlTxBytes += bytes;
+    }
+    void ControlRx(uint8_t, uint32_t) { ++m_run.ctlRx; }
+    void RouteChanged(Ipv4Address, Ipv4Address, bool added) {
+        ++(added ? m_run.routeAdds : m_run.routeRemoves);
+    }
+    void DataDecision(Ipv4Address, swarm::core::RouteAction a) {
+        ++m_run.decisions[static_cast<int>(a)];
+    }
+    void StateSize(uint32_t entries, uint32_t) {
+        ++m_run.stateReports;
+        m_run.lastEntries = entries;
     }
     void Send() {
         ++m_run.sent;
@@ -365,6 +412,54 @@ private:
         // The relay jitter is drawn from the seeded stream, so the FANT
         // relays leave at other times under another seed.
         NS_TEST_EXPECT_MSG_EQ((a.trace != c.trace), true, "seed 2: a different trace");
+    }
+};
+
+class ObserverTestCase : public TestCase {
+public:
+    ObserverTestCase()
+        : TestCase("observer: trace sources and counters, same run with and without them") {}
+
+private:
+    void DoRun() override {
+        const ChainRun plain = Chain().Run(1, 20);
+        ChainRun seen = Chain().Run(1, 20, true);
+        NS_TEST_ASSERT_MSG_GT(plain.trace.size(), 0u, "something happened");
+        NS_TEST_EXPECT_MSG_EQ((seen.trace == plain.trace), true,
+                              "same seed: byte-identical with the trace sources connected");
+        NS_TEST_EXPECT_MSG_EQ(seen.received, plain.received, "same deliveries");
+
+        // The trace sources agree with the ants that left (AntTx) and the counters.
+        NS_TEST_EXPECT_MSG_EQ(seen.ctlTx, seen.fants + seen.bants, "ControlTx per ant sent");
+        NS_TEST_EXPECT_MSG_EQ(seen.ctlTxBytes, seen.ctlTx * ::ara::core::kAntWireSize,
+                              "each ant is its encoded size");
+        NS_TEST_EXPECT_MSG_GT(seen.ctlRx, 0u, "ants received");
+        NS_TEST_EXPECT_MSG_GT(seen.routeAdds, 0u, "trails laid");
+        NS_TEST_EXPECT_MSG_GT(seen.stateReports, 0u, "the table's size reported");
+        // Node 0 originates 20 packets: 1 dropped (no trail), 19 forwarded; the relays
+        // forward 19 each, and node 3 delivers 19.
+        NS_TEST_EXPECT_MSG_EQ(seen.decisions[static_cast<int>(swarm::core::RouteAction::Drop)], 1u,
+                              "one drop: the packet without a trail");
+        NS_TEST_EXPECT_MSG_EQ(seen.decisions[static_cast<int>(swarm::core::RouteAction::Deliver)],
+                              19u, "19 delivered");
+        NS_TEST_EXPECT_MSG_EQ(seen.decisions[static_cast<int>(swarm::core::RouteAction::Unicast)],
+                              3u * 19u, "19 forwarded at each of nodes 0, 1 and 2");
+
+        // The counters are kept with or without trace sources connected.
+        NS_TEST_EXPECT_MSG_EQ((seen.stats == plain.stats), true,
+                              "counters do not depend on traces");
+        const auto fant = seen.stats.control.find(static_cast<uint8_t>(AntType::Forward));
+        const auto bant = seen.stats.control.find(static_cast<uint8_t>(AntType::Backward));
+        NS_TEST_ASSERT_MSG_EQ(
+            (fant != seen.stats.control.end() && bant != seen.stats.control.end()), true,
+            "both kinds counted");
+        NS_TEST_EXPECT_MSG_EQ(fant->second.txPackets, seen.fants, "FANTs sent");
+        NS_TEST_EXPECT_MSG_EQ(bant->second.txPackets, seen.bants, "BANTs sent");
+        NS_TEST_EXPECT_MSG_EQ(seen.stats.routeAdds, seen.routeAdds, "route adds");
+        NS_TEST_EXPECT_MSG_EQ(seen.stats.routeRemoves, seen.routeRemoves, "route removes");
+        NS_TEST_EXPECT_MSG_GT(seen.stats.peakStateBytes, 0u, "a state footprint");
+        NS_TEST_EXPECT_MSG_EQ(seen.fantName, "FANT", "kind names are registered");
+        NS_TEST_EXPECT_MSG_EQ(seen.bantName, "BANT", "kind names are registered");
     }
 };
 
@@ -472,6 +567,7 @@ public:
         AddTestCase(new ChainDeliveryTestCase, TestCase::Duration::QUICK);
         AddTestCase(new MaintenanceTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DeterminismTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new ObserverTestCase, TestCase::Duration::QUICK);
         AddTestCase(new AdapterGuardsTestCase, TestCase::Duration::QUICK);
     }
 };

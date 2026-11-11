@@ -27,6 +27,11 @@
 //    backtracking ([G02] §3.2, §3.3) arrive with the core's next slices;
 //    until then the adapter does not react to a link failure.
 //  - ants: the core's Broadcast and Unicast decisions, as one-hop UDP sends.
+//  - the observer: the core reports through SwarmRoutingBase::Observer()
+//    (ControlTx/ControlRx/RouteChanged/DataDecision/StateSize trace sources,
+//    GetRouterStats), and the FANT/BANT kind names are registered with the
+//    TypeId. Transit data asks core::Router::onTransitData; at the
+//    destination, OnDataReceived reports the core's Deliver.
 #ifndef ARA_ROUTING_PROTOCOL_H
 #define ARA_ROUTING_PROTOCOL_H
 

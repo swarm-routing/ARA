@@ -7,7 +7,7 @@ before changing anything. Org-wide conventions:
 
 ## What this repo is
 
-**Status: `core/` and `ns3/` in progress (Phase 3, #5).** The core's first slice, route discovery (FANT/BANT, trails, evaporation, next hop, discovery retries, the ant wire header), builds and tests on its own and inside ns-3 as the contrib module `ara`, whose adapter carries it out on swarm-core's `SwarmRoutingBase`; data reinforcement, duplicate errors and route-failure backtracking come next, then the anchor.
+**Status: `core/` and `ns3/` in progress (Phase 3, #5).** The core's first slice, route discovery (FANT/BANT, trails, evaporation, next hop, discovery retries, the ant wire header), builds and tests on its own and inside ns-3 as the contrib module `ara`, whose adapter carries it out on swarm-core's `SwarmRoutingBase`; data reinforcement and the router observer are in; duplicate errors and route-failure backtracking come next, then the anchor.
 
 ARA, the Ant-Colony-Based Routing Algorithm (Güneş, Sorges & Bouazizi, 2002),
 as a standalone hexagonal protocol: a simulator-agnostic `core/` and an ns-3
@@ -17,9 +17,10 @@ replaces AntHocNet's `ara` comparator arm.
 ```
 core/       simulator-agnostic algorithm + unit tests (no ns-3 headers; MIT OR GPL-2.0-only, core/LICENSE),
             on swarm-core's dual-licensed core/ primitives (pinned: SWARM_CORE_REF in core/CMakeLists.txt)
-  ara-ant.*       FANT/BANT and their versioned wire header
+  ara-ant.*       FANT/BANT, their versioned wire header and kAntKindNames (the observer's names for the type bytes)
   ara-config.h    the protocol constants, each citing its docs/fidelity.md row
-  ara-router.*    per-node state and decisions (ports in, RouteDecisions out)
+  ara-router.*    per-node state and decisions (ports in, RouteDecisions out); reports ants sent and received, trail adds and
+                  removes, data decisions and the trail table's size to an optional swarm-core IRouterObserver (setObserver)
   test/           the core tests (plain CMake + ctest; the ns-3 suite will run the same list)
 ns3/        (planned) contrib module `ara` (GPL-2.0-only): header codec, adapter, helper, examples, test suite
 docs/       fidelity sheet (paper section -> implementation), parameters with sources
