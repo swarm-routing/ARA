@@ -10,11 +10,15 @@ org-wide policy is [swarm-routing/.github SECURITY.md](https://github.com/swarm-
 code guarantees. A protocol: its wire-format decoder (org invariant 3). A
 tool: the parsers of files it reads. If nothing parses untrusted input, say
 so in one line. -->
-The decoder of ARA's control headers (forward and backward ants, the
-duplicate-error and route-error signals), to be built on `swarm-core`'s
-bounds-checked little-endian readers with roundtrip and fuzz tests (org
-invariant 3). It is not written yet (#5): until it is, nothing in this
-repository parses untrusted input.
+The decoder of ARA's control headers: `core/ara-ant.cc` `decodeAnt`, which the
+ns-3 adapter reaches through `DecodeAntPacket` (`ns3/model/ara-header.cc`) for
+every payload on the control port. It reads exactly one 16-byte forward or
+backward ant with `swarm-core`'s bounds-checked little-endian readers, and
+refuses a wrong version byte, an unknown type, a short buffer or trailing bytes
+(org invariant 3); a refused payload is dropped without touching the routing
+state. Roundtrip and seeded fuzz tests cover it in `core/test/` and
+`ns3/test/`. The duplicate-error and route-error signals of [G02] §3.2-3.3
+are not written yet (#5).
 
 ## Known, by-design limitations (out of scope)
 
