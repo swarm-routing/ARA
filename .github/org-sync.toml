@@ -34,3 +34,18 @@ required_checks = ["check / org-sync", "title / title", "headers / licence", "co
 # Merge through a merge queue (swarm-routing/.github#130); every workflow behind a required
 # check also runs on merge_group.
 merge_queue = true
+
+# The work this repository implements or builds on: the README's Releases &
+# citing list and CITATION.cff's references (swarm-routing/.github org-sync,
+# #228). Every DOI confirmed with lit_search.py confirm; fields from Crossref.
+
+[[references]]
+type = "conference-paper"
+title = "ARA-the ant-colony based routing algorithm for MANETs"
+authors = ["Güneş, M.", "Sorges, U.", "Bouazizi, I."]
+year = 2002
+venue = "Proceedings. International Conference on Parallel Processing Workshop"
+pages = "79-85"
+publisher = "IEEE"
+doi = "10.1109/ICPPW.2002.1039715"
+role = "The algorithm this repository implements; docs/fidelity.md maps each of its sections to the code and marks the repository choices."
