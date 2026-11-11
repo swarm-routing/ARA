@@ -11,6 +11,7 @@
 [![Bugs](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ARA&metric=bugs)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ARA)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ARA&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ARA)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ARA&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ARA)
+[![codecov](https://codecov.io/gh/swarm-routing/ARA/graph/badge.svg)](https://codecov.io/gh/swarm-routing/ARA)
 [![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/swarm-routing/ARA?utm_source=oss&utm_medium=github&utm_campaign=swarm-routing%2FARA&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)](https://coderabbit.ai)
 <!-- org-sync:end badges -->
 
