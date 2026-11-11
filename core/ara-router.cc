@@ -1,7 +1,8 @@
 // Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 //
-// Route discovery ([G02] §3.1) and its bookkeeping; see ara-router.h. Each
+// Route discovery ([G02] §3.1), route maintenance by data ([G02] §3.2) and
+// their bookkeeping; see ara-router.h. Each
 // rule names the docs/fidelity.md row it implements.
 #include "ara-router.h"
 
@@ -48,8 +49,70 @@ void Router::age() {
     if (!(now > lastAged_)) return;
     const double retain = swarm::core::evaporationFactor(
         1.0 - config_.evaporationRate, now - lastAged_, config_.evaporationPeriod);
+    if (!observer_) {
+        table_.evaporate(retain, config_.expiryThreshold);
+        lastAged_ = now;
+        return;
+    }
+    // The table does not say which entries expired: compare before and after,
+    // in (destination, neighbour) order, so the report is deterministic.
+    std::vector<std::pair<NodeAddress, NodeAddress>> before;
+    for (const NodeAddress dest : table_.destinations()) {
+        for (const auto& e : table_.entries(dest))
+            before.emplace_back(dest, e.neighbor);
+    }
     table_.evaporate(retain, config_.expiryThreshold);
     lastAged_ = now;
+    for (const auto& [dest, over] : before) {
+        if (!table_.contains(dest, over)) observer_->onRouteChanged(dest, over, false);
+    }
+    reportState();
+}
+
+void Router::setObserver(swarm::core::IRouterObserver* observer) {
+    observer_ = observer;
+    reportedEntries_.reset();
+}
+
+void Router::emit(const AntDecision& decision) {
+    if (observer_ && decision.message) {
+        observer_->onControlSent(static_cast<std::uint8_t>(decision.message->type),
+                                 decision.action == swarm::core::RouteAction::Broadcast,
+                                 static_cast<std::uint32_t>(kAntWireSize));
+    }
+    sink_(decision);
+}
+
+// An entry that was not in the table and is now is a route added; a refused
+// write (full table, org rule 7) or a raise of an existing entry is not.
+void Router::trailWritten(NodeAddress dest, NodeAddress over, bool existed) {
+    if (!observer_) return;
+    if (!existed && table_.contains(dest, over)) observer_->onRouteChanged(dest, over, true);
+    reportState();
+}
+
+void Router::reportState() {
+    if (reportedEntries_ && *reportedEntries_ == table_.size()) return;
+    reportedEntries_ = table_.size();
+    observer_->onStateSize(static_cast<std::uint32_t>(table_.size()),
+                           static_cast<std::uint32_t>(table_.size()) * kTrailEntryBytes);
+}
+
+void Router::setTrail(NodeAddress dest, NodeAddress over, double value) {
+    const bool existed = table_.contains(dest, over);
+    table_.set(dest, over, value);  // refused when full: no trail (org rule 7)
+    trailWritten(dest, over, existed);
+}
+
+void Router::addTrail(NodeAddress dest, NodeAddress over, double delta) {
+    const bool existed = table_.contains(dest, over);
+    table_.add(dest, over, delta);  // refused when full (org rule 7)
+    trailWritten(dest, over, existed);
+}
+
+AntDecision Router::decided(AntDecision decision, NodeAddress dest) {
+    if (observer_) observer_->onDataDecision(dest, decision.action);
+    return decision;
 }
 
 // Fidelity "Next-hop choice for data among the trails": the highest ϕ;
@@ -71,8 +134,25 @@ NodeAddress Router::bestHop(NodeAddress dest) const {
 void Router::layTrail(NodeAddress toward, NodeAddress over, std::uint8_t hops) {
     const double initial = 1.0 / static_cast<double>(std::max<std::uint8_t>(hops, 1));
     if (table_.get(toward, over) < initial) {
-        table_.set(toward, over, initial);  // refused when full: no trail (org rule 7)
+        setTrail(toward, over, initial);
     }
+}
+
+// Fidelity "Route maintenance by data": [G02] §3.2's ϕ := ϕ + Δϕ (eq. 1) on
+// the entry the data packet used, after evaporating to now. Nothing toward
+// this node itself, and nothing over an unknown neighbour.
+void Router::reinforce(NodeAddress toward, NodeAddress over) {
+    if (toward == self_ || toward == kInvalidAddress || over == kInvalidAddress) return;
+    age();
+    addTrail(toward, over, config_.deposit);
+}
+
+void Router::onDataSent(NodeAddress dest, NodeAddress next) {
+    reinforce(dest, next);
+}
+
+void Router::onDataReceived(NodeAddress source, NodeAddress prev) {
+    reinforce(source, prev);
 }
 
 NodeAddress Router::nextHop(NodeAddress dest) {
@@ -85,12 +165,22 @@ double Router::pheromone(NodeAddress dest, NodeAddress neighbor) {
     return table_.get(dest, neighbor);
 }
 
-AntDecision Router::onLocalData(NodeAddress dest) {
-    if (dest == self_) return AntDecision::deliver();
+AntDecision Router::onTransitData(NodeAddress dest) {
+    if (dest == self_) return decided(AntDecision::deliver(), dest);
     age();
     const NodeAddress hop = bestHop(dest);
     if (hop != kInvalidAddress) {
-        return {swarm::core::RouteAction::Unicast, hop, std::nullopt};
+        return decided({swarm::core::RouteAction::Unicast, hop, std::nullopt}, dest);
+    }
+    return decided(AntDecision::drop(), dest);
+}
+
+AntDecision Router::onLocalData(NodeAddress dest) {
+    if (dest == self_) return decided(AntDecision::deliver(), dest);
+    age();
+    const NodeAddress hop = bestHop(dest);
+    if (hop != kInvalidAddress) {
+        return decided({swarm::core::RouteAction::Unicast, hop, std::nullopt}, dest);
     }
     // Fidelity "Data packets waiting for a route": no buffering, dropped.
     if (auto it = discoveries_.find(dest); it != discoveries_.end()) {
@@ -98,11 +188,17 @@ AntDecision Router::onLocalData(NodeAddress dest) {
     } else {
         startDiscovery(dest);
     }
-    return AntDecision::drop();
+    return decided(AntDecision::drop(), dest);
 }
 
 void Router::onAnt(const AntMessage& ant, NodeAddress from) {
-    if (ant.source == self_ || from == kInvalidAddress) return;
+    if (from == kInvalidAddress) return;
+    // Received and processed, even if only to drop an echo of our own FANT.
+    if (observer_) {
+        observer_->onControlReceived(static_cast<std::uint8_t>(ant.type),
+                                     static_cast<std::uint32_t>(kAntWireSize));
+    }
+    if (ant.source == self_) return;
     age();
     if (ant.type == AntType::Forward) {
         onForwardAnt(ant, from);
@@ -122,7 +218,7 @@ void Router::onForwardAnt(const AntMessage& ant, NodeAddress from) {
         // Fidelity "Destination destroys the FANT and answers with a BANT",
         // unicast back along the FANT's path ("How the BANT travels back").
         AntMessage bant{AntType::Backward, self_, ant.source, ant.sequence, 0, config_.antTtl};
-        sink_(AntDecision::unicast(from, bant));
+        emit(AntDecision::unicast(from, bant));
         return;
     }
     if (ant.ttl <= 1) return;  // fidelity "FANT maximum hops / TTL"
@@ -134,7 +230,7 @@ void Router::onForwardAnt(const AntMessage& ant, NodeAddress from) {
     // the injected RNG (org rule 5), then a broadcast after that delay.
     const double draw = rng_.uniform();
     const Time delay = draw * config_.relayJitterMax;
-    timers_.schedule(delay, [this, relay] { sink_(AntDecision::broadcast(relay)); });
+    timers_.schedule(delay, [this, relay] { emit(AntDecision::broadcast(relay)); });
 }
 
 void Router::onBackwardAnt(const AntMessage& ant, NodeAddress from) {
@@ -156,7 +252,7 @@ void Router::onBackwardAnt(const AntMessage& ant, NodeAddress from) {
     AntMessage relay = ant;
     relay.hops = hops;
     relay.ttl = static_cast<std::uint8_t>(ant.ttl - 1);
-    sink_(AntDecision::unicast(back, relay));
+    emit(AntDecision::unicast(back, relay));
 }
 
 void Router::startDiscovery(NodeAddress dest) {
@@ -172,7 +268,7 @@ void Router::startDiscovery(NodeAddress dest) {
 // number". The source remembers its own FANT so that echoes are dropped.
 void Router::sendFant(NodeAddress dest, std::uint32_t sequence) {
     fantHistory_.record(self_, sequence);
-    sink_(AntDecision::broadcast(
+    emit(AntDecision::broadcast(
         AntMessage{AntType::Forward, self_, dest, sequence, 0, config_.antTtl}));
 }
 

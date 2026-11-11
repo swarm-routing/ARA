@@ -7,7 +7,7 @@ before changing anything. Org-wide conventions:
 
 ## What this repo is
 
-**Status: `core/` in progress (Phase 3, #5).** Its first slice, route discovery (FANT/BANT, trails, evaporation, next hop, discovery retries, the ant wire header), builds and tests on its own; data forwarding, duplicate errors and route-failure backtracking come next. `ns3/` is still the plan (marked below); update this file in the PR that creates it.
+**Status: `core/` and `ns3/` in progress (Phase 3, #5).** The core's first slice, route discovery (FANT/BANT, trails, evaporation, next hop, discovery retries, the ant wire header), builds and tests on its own and inside ns-3 as the contrib module `ara`, whose adapter carries it out on swarm-core's `SwarmRoutingBase`; data reinforcement and the router observer are in; duplicate errors and route-failure backtracking come next, then the anchor.
 
 ARA, the Ant-Colony-Based Routing Algorithm (Güneş, Sorges & Bouazizi, 2002),
 as a standalone hexagonal protocol: a simulator-agnostic `core/` and an ns-3
@@ -17,13 +17,15 @@ replaces AntHocNet's `ara` comparator arm.
 ```
 core/       simulator-agnostic algorithm + unit tests (no ns-3 headers; MIT OR GPL-2.0-only, core/LICENSE),
             on swarm-core's dual-licensed core/ primitives (pinned: SWARM_CORE_REF in core/CMakeLists.txt)
-  ara-ant.*       FANT/BANT and their versioned wire header
+  ara-ant.*       FANT/BANT, their versioned wire header and kAntKindNames (the observer's names for the type bytes)
   ara-config.h    the protocol constants, each citing its docs/fidelity.md row
-  ara-router.*    per-node state and decisions (ports in, RouteDecisions out)
+  ara-router.*    per-node state and decisions (ports in, RouteDecisions out); reports ants sent and received, trail adds and
+                  removes, data decisions and the trail table's size to an optional swarm-core IRouterObserver (setObserver)
   test/           the core tests (plain CMake + ctest; the ns-3 suite will run the same list)
 ns3/        (planned) contrib module `ara` (GPL-2.0-only): header codec, adapter, helper, examples, test suite
 docs/       fidelity sheet (paper section -> implementation), parameters with sources
 .github/workflows/core.yml   core/ alone: strict warnings, tests, ASan + UBSan, clang-format (check `core`)
+.github/workflows/swarm-core-pin.yml   the swarm-core pin is one SHA and current (check `swarm-core / pin`)
 ```
 
 ## Build & verify
@@ -37,10 +39,14 @@ cmake -S core -B build/asan -DARA_CORE_SANITIZE=ON -DSWARM_CORE_DIR=/path/to/ns3
 
 It fetches swarm-core at `SWARM_CORE_REF` unless `SWARM_CORE_DIR` names a
 checkout's `core/`; bump the pin together with `core-deps` in
-`.github/workflows/licence.yml` and `SWARM_CORE_REF` in the `Makefile`.
-Once `ns3/` exists:
+`.github/workflows/licence.yml` and `.github/workflows/ns3.yml`, and
+`SWARM_CORE_REF` in the `Makefile`. The ns-3 module builds on swarm-core
+`main` instead; the `swarm-core / pin` check (`swarm-core-pin.yml`, on
+swarm-routing/.github's `reusable-swarm-core-pin.yml`) fails when main's
+`core/` is no longer the pinned one, or when the four places name different
+SHAs, so a swarm-core change is met by a pin bump here.
 
-CI is [`reusable-ns3-ci.yml`](https://github.com/swarm-routing/.github/blob/main/.github/workflows/reusable-ns3-ci.yml):
+CI for `ns3/` is [`reusable-ns3-ci.yml`](https://github.com/swarm-routing/.github/blob/main/.github/workflows/reusable-ns3-ci.yml):
 the module builds inside `ghcr.io/swarm-routing/ns3-dev:latest-{debug,sanitized}`
 (warm ns-3 tree; only the module compiles) and runs its test.py suites.
 `latest` is the release ns-3 supports (it maintains its latest only), so
@@ -50,12 +56,24 @@ CONTRIBUTING invariant 7). The
 same locally:
 
 ```bash
-docker run --rm -v "$PWD:/src/ara:ro" ghcr.io/swarm-routing/ns3-dev:latest-debug \
-    ns3-build-contrib --test swarm-core=/src/ns3-swarm-core ara=/src/ara/ns3
+docker run --rm -v "$PWD:/src/ara:ro" -v "$PWD/../ns3-swarm-core:/src/ns3-swarm-core:ro" \
+    ghcr.io/swarm-routing/ns3-dev:latest-debug \
+    ns3-build-contrib --strict-warnings --quality-modules ara --test \
+    swarm-core=/src/ns3-swarm-core ara=/src/ara/ns3
 ```
 
-(mount a checkout of `swarm-routing/ns3-swarm-core` at `/src/ns3-swarm-core`).
-CI passes `dependencies: swarm-core=swarm-routing/ns3-swarm-core@main`.
+(`make test` does the same with `SWARM_CORE_NS3=<checkout>`, default
+`../ns3-swarm-core`). To build the harness arm and run it in the same
+container, also mount `swarm-routing/ns3-tools` at `/src/ns3-tools`, add
+`routing-bench=/src/ns3-tools/ns3/routing-bench` before `ara=`, and pass
+`--run "routing-compare --scenario=paper --nNodes=20 --time=30 --runs=1
+--protocols=ara"` to `ns3-build-contrib`. CI
+(`.github/workflows/ns3.yml`) passes `dependencies:
+swarm-core=swarm-routing/ns3-swarm-core@main` and
+`routing-bench=swarm-routing/ns3-tools@main:ns3/routing-bench`, runs
+`routing-compare --scenario=paper --nNodes=20 --time=30 --runs=1
+--protocols=ara` as the smoke and `ara-example --seed={seed}` as the
+determinism program.
 
 ## Golden rules (invariants — do not break)
 
@@ -70,16 +88,21 @@ Org-wide (1–9), then this repo's own.
    `.h`/`.hpp`/`.cc`/`.cpp`/`.py`/`.sh` starts with
    `// Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)` +
    `// SPDX-License-Identifier: <MIT OR GPL-2.0-only | GPL-2.0-only>` (`#`
-   comments where needed), matching its directory in `LICENSING.md`. CI
-   (`reusable-licence-check.yml`) checks it. A new directory gets its row in
-   `LICENSING.md` in the same PR.
+   comments where needed), matching its directory in `LICENSING.md`; an
+   outside contributor may add their own `Copyright (c) <year> <Name>` line
+   beneath the org line, never replace it, and signs off every commit (DCO,
+   CONTRIBUTING "Outside contributions"). CI (`reusable-licence-check.yml`)
+   checks it. A new directory gets its row in `LICENSING.md` in the same PR.
 2. **The licence boundary only goes one way.** GPL code may use the dual
    parts; dual code never pulls GPL-only code in: a `core/` file includes only
    the C++ standard library, other `core/` files and the dual-licensed `core/`
-   of a dependency pinned by commit and declared in the repo's `licence.yml`
-   `core-deps`, with `core-roots` naming the repo's own `core/` (without it
-   the check skips core includes; a protocol's `core/` on swarm-core's; CI
-   checks it, `check-headers.py --core-dep`), and a dual script imports no GPL-only code. Code coming from AntHocNet keeps its
+   of a dependency pinned by commit and declared as the `core-deps` input of
+   every workflow that runs the licence check (one calling
+   `reusable-licence-check.yml`, or one calling `reusable-ns3-ci.yml`, which
+   forwards it; workflow file names differ per repo), each with the same pin,
+   with `core-roots` naming the repo's own `core/`
+   (without it the check skips core includes; a protocol's `core/` on
+   swarm-core's; CI checks it, `check-headers.py --core-dep`), and a dual script imports no GPL-only code. Code coming from AntHocNet keeps its
    licence: its `core/`/`tools/` (dual) may land in dual or GPL paths here; its
    `ns3/` modules and `web/` (GPL-2.0-only) only in GPL paths. Third-party code
    (AntHocNet's vendored `aomdv`/`gpsr`, IITP RAS) lands only in GPL paths with
@@ -172,8 +195,8 @@ Org-wide (1–9), then this repo's own.
   and open PRs; a release is the bump PR from `bot/release`, tagged after it
   merges (CONTRIBUTING "Cutting a release").
 - When a PR falls behind `main`, update it
-  (`gh api -X PUT repos/<owner>/<repo>/pulls/<n>/update-branch`) and merge PRs
-  one at a time, each after its CI on the updated branch. Never force-push a
+  (`gh api -X PUT "repos/<owner>/<repo>/pulls/<n>/update-branch"`, with
+  `<owner>/<repo>` the PR's base repository and `<n>` its number) and merge PRs one at a time, each after its CI on the updated branch. Never force-push a
   branch someone else pushed. A behind `bot/release` PR is the exception:
   dispatch the release `bump` again, so the version and changelog are rebuilt
   on the new `main`.

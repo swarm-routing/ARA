@@ -1,0 +1,134 @@
+// Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
+// SPDX-License-Identifier: GPL-2.0-only
+#include "ara-routing-protocol.h"
+
+#include "ara-header.h"
+#include "ara-router.h"
+
+#include "ns3/abort.h"
+#include "ns3/log.h"
+
+namespace ns3 {
+namespace ara {
+
+NS_LOG_COMPONENT_DEFINE("AraRoutingProtocol");
+NS_OBJECT_ENSURE_REGISTERED(RoutingProtocol);
+
+TypeId RoutingProtocol::GetTypeId() {
+    // Registered with the TypeId, once, so every way of installing the
+    // protocol gets the names (FANT, BANT) in its observer's readers.
+    static TypeId tid = [] {
+        TypeId t = TypeId("ns3::ara::RoutingProtocol")
+                       .SetParent<SwarmRoutingBase>()
+                       .SetGroupName("Ara")
+                       .AddConstructor<RoutingProtocol>()
+                       .AddTraceSource("AntTx", "An ant this node sent (type byte, broadcast).",
+                                       MakeTraceSourceAccessor(&RoutingProtocol::m_antTx),
+                                       "ns3::ara::RoutingProtocol::AntTxCallback");
+        SwarmRoutingBase::SetKindNames(t, core::kAntKindNames);
+        return t;
+    }();
+    return tid;
+}
+
+RoutingProtocol::RoutingProtocol() = default;
+
+RoutingProtocol::~RoutingProtocol() = default;
+
+void RoutingProtocol::DoInitialize() {
+    // The interfaces are up by now (addresses are assigned before the
+    // simulation starts), so the node's address is known. The protocol
+    // constants are core::Config's defaults, each sourced in docs/fidelity.md.
+    const swarm::core::NodeAddress self = ToNodeAddress(MainAddress());
+    m_router = std::make_unique<core::Router>(
+        self, core::Config{}, m_clock, Rng(), Timers(), [this](const core::AntDecision& d) {
+            NS_ASSERT_MSG(d.message, "the ARA core sends ants only");
+            m_antTx(static_cast<uint8_t>(d.message->type),
+                    d.action == swarm::core::RouteAction::Broadcast);
+            const bool done = Execute(d, MakeAntPacket);
+            NS_ASSERT_MSG(done, "the ARA core sends ants only by Broadcast or Unicast");
+            (void)done;
+        });
+    m_router->setObserver(&Observer());
+    SwarmRoutingBase::DoInitialize();
+}
+
+void RoutingProtocol::DoDispose() {
+    // The base cancels the core's pending timers first; then the router goes.
+    SwarmRoutingBase::DoDispose();
+    m_router.reset();
+}
+
+Ipv4Address RoutingProtocol::NextHop(Ipv4Address dst) {
+    return m_router ? ToIpv4Address(m_router->nextHop(ToNodeAddress(dst))) : Ipv4Address();
+}
+
+Ipv4Address RoutingProtocol::SelectNextHop(Ipv4Address dst, Ipv4Address /*src*/, Ipv4Address prev,
+                                           Ptr<const Packet> /*p*/) {
+    // A broadcast or multicast address is no core address (255.255.255.255
+    // reads as kInvalidAddress): such packets are not routed.
+    if (!m_router || dst.IsBroadcast() || dst.IsMulticast()) {
+        return Ipv4Address();
+    }
+    const swarm::core::NodeAddress dest = ToNodeAddress(dst);
+    if (prev == Ipv4Address()) {
+        // This node's own data (RouteOutput): the core decides, and a Drop has
+        // started the discovery or counted as demand for its retry. A packet
+        // to this node itself (the ICMP error the stack sends for a dropped
+        // packet) never leaves it: no route, no decision to report.
+        if (dest == m_router->self()) {
+            return Ipv4Address();
+        }
+        const core::AntDecision d = m_router->onLocalData(dest);
+        return d.action == swarm::core::RouteAction::Unicast ? ToIpv4Address(d.nextHop)
+                                                             : Ipv4Address();
+    }
+    return ToIpv4Address(m_router->onTransitData(dest).nextHop);
+}
+
+void RoutingProtocol::StartDiscovery(Ipv4Address dst) {
+    // The core has no route for this packet and holds none (its Drop): the
+    // packet the base just deferred is dropped now. A source's discovery was
+    // started by onLocalData; a relay starts none ([G02] §3.3's backtracking
+    // is the core's next slice).
+    DiscardDeferred(dst);
+}
+
+bool RoutingProtocol::OnDataReceived(Ptr<const Packet> /*p*/, const Ipv4Header& header,
+                                     Ipv4Address prev) {
+    // [G02] §3.2: the next hop strengthens the trail toward the source.
+    if (m_router) {
+        m_router->onDataReceived(ToNodeAddress(header.GetSource()), ToNodeAddress(prev));
+        // At the destination the base hands the packet up (no SelectNextHop):
+        // the core reports that decision (Deliver) here. A relay's decision is
+        // reported by SelectNextHop next.
+        const swarm::core::NodeAddress dest = ToNodeAddress(header.GetDestination());
+        if (dest == m_router->self()) {
+            (void)m_router->onTransitData(dest);
+        }
+    }
+    return true;
+}
+
+void RoutingProtocol::OnDataForwarded(Ptr<const Packet> p, const Ipv4Header& header,
+                                      Ipv4Address next) {
+    // [G02] §3.2: the node handing data to `next` strengthens (D, next).
+    // RouteOutput can be asked for a route with no packet (a socket probing
+    // its source address): no data moves then, so nothing is deposited.
+    if (m_router && p) {
+        m_router->onDataSent(ToNodeAddress(header.GetDestination()), ToNodeAddress(next));
+    }
+}
+
+void RoutingProtocol::RecvControl(Ptr<Packet> p, Ipv4Address from, Ipv4Address /*receiver*/) {
+    if (!m_router) return;
+    const auto ant = DecodeAntPacket(p);
+    if (!ant) {
+        NS_LOG_DEBUG("dropped a malformed ant from " << from);
+        return;
+    }
+    m_router->onAnt(*ant, ToNodeAddress(from));
+}
+
+}  // namespace ara
+}  // namespace ns3

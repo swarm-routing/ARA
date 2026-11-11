@@ -16,19 +16,23 @@ ORG_DIR   ?= $(HOME)/.cache/swarm-routing/dotgithub
 ORG_REF   ?= main
 # swarm-core's core/ at the commit core/CMakeLists.txt pins (SWARM_CORE_REF), for the include check.
 SWARM_CORE_SRC ?= $(HOME)/.cache/swarm-routing/ns3-swarm-core
-SWARM_CORE_REF ?= 206954e225f1098eb78fb8c2a72ffdd77627d7a8
+SWARM_CORE_REF ?= 3ced81506bd906163dc83f5825d77ca170609dfb
+# A checkout of swarm-routing/ns3-swarm-core (its main, as ns3.yml) for the ns-3 build.
+SWARM_CORE_NS3 ?= $(CURDIR)/../ns3-swarm-core
+NS3_RUN = docker run --rm -v "$(CURDIR):/src/ara:ro" -v "$(SWARM_CORE_NS3):/src/ns3-swarm-core:ro" $(NS3_IMAGE) \
+	ns3-build-contrib --strict-warnings --quality-modules ara
 
 .DEFAULT_GOAL := help
-.PHONY: help build test lint format check clean shell ci headers org-sync-check org-tools core-test swarm-core
+.PHONY: help build test lint format check clean shell ci headers org-sync-check org-tools core-test swarm-core dist
 
 help: ## list the targets
 	@awk 'BEGIN{FS=":.*## "} /^[a-zA-Z0-9_-]+:.*## /{printf "  %-16s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 build: ## build what this repo ships
-	if [ -d ns3 ]; then docker run --rm -v "$(CURDIR):/src:ro" $(NS3_IMAGE) ns3-build-contrib ara=/src/ns3; else echo "make build: no ns3/ module yet"; fi
+	$(NS3_RUN) swarm-core=/src/ns3-swarm-core ara=/src/ara/ns3
 
 test: core-test ## the fast tests CI runs on every PR
-	if [ -d ns3 ]; then docker run --rm -v "$(CURDIR):/src:ro" $(NS3_IMAGE) ns3-build-contrib --test ara=/src/ns3; else echo "make test: no ns3/ module yet"; fi
+	$(NS3_RUN) --test swarm-core=/src/ns3-swarm-core ara=/src/ara/ns3
 
 lint: ## static checks, no changes
 	git ls-files "*.h" "*.cc" "*.cpp" "*.hpp" | xargs -r clang-format --dry-run --Werror
@@ -37,7 +41,7 @@ format: ## apply the formatters
 	git ls-files "*.h" "*.cc" "*.cpp" "*.hpp" | xargs -r clang-format -i
 
 clean: ## remove build outputs
-	rm -rf build
+	rm -rf build dist
 
 shell: ## an interactive shell in the dev image with this repo at /src
 	@command -v docker >/dev/null || { echo "make shell: docker not found (Docker Desktop, Colima, or docker.io)" >&2; exit 127; }
@@ -63,3 +67,16 @@ ci: check ## exactly what CI runs
 
 core-test: ## core/ alone, no ns-3: plain CMake + ctest with CI's strict warnings
 	cmake -S core -B build/core && cmake --build build/core && ctest --test-dir build/core --output-on-failure
+
+# The release asset for swarm-routing/.github's reusable-release.yml, which sets
+# RELEASE_VERSION (locally: .cz.toml's version). A git archive of the commit, so
+# only tracked files, deterministically: ara-<ver>/ with
+# core/ with its LICENSE, ns3/ (the `ara` module) and docs/,
+# the licence files, README.md, AGENTS.md, the Makefile and CHANGELOG.md (once
+# the first bump writes it).
+RELEASE_VERSION ?= $(shell sed -n 's/^version = "\(.*\)"$$/\1/p' .cz.toml)
+dist: ## the release asset in dist/: ara-<ver>.tar.gz
+	rm -rf dist && mkdir -p dist
+	git archive --format=tar.gz --prefix=ara-$(RELEASE_VERSION)/ -o dist/ara-$(RELEASE_VERSION).tar.gz HEAD \
+		$$(git ls-tree --name-only HEAD core ns3 docs LICENSE LICENSE-MIT LICENSING.md README.md AGENTS.md Makefile CHANGELOG.md)
+	tar -tzf dist/ara-$(RELEASE_VERSION).tar.gz | grep -qx 'ara-$(RELEASE_VERSION)/core/LICENSE'

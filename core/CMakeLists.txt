@@ -21,7 +21,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(SWARM_CORE_DIR "" CACHE PATH "swarm-core's core/ directory; empty: fetch SWARM_CORE_REF")
-set(SWARM_CORE_REF "206954e225f1098eb78fb8c2a72ffdd77627d7a8" CACHE STRING
+set(SWARM_CORE_REF "3ced81506bd906163dc83f5825d77ca170609dfb" CACHE STRING
     "swarm-routing/ns3-swarm-core commit to fetch when SWARM_CORE_DIR is empty")
 option(ARA_CORE_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 
@@ -51,6 +51,7 @@ endif()
 
 add_library(swarm_core_primitives STATIC
   ${SWARM_CORE_DIR}/swarm-dedup-history.cc
+  ${SWARM_CORE_DIR}/swarm-observer.cc
   ${SWARM_CORE_DIR}/swarm-pheromone-table.cc
   ${SWARM_CORE_DIR}/swarm-selection.cc
 )
@@ -68,7 +69,9 @@ add_executable(ara_core_tests
   test/all-tests.cc
   test/run-core-tests.cc
   test/test-ant-codec.cc
+  test/test-maintenance.cc
   test/test-network.cc
+  test/test-observer.cc
   test/test-router.cc
 )
 target_link_libraries(ara_core_tests PRIVATE ara_core)
