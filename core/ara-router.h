@@ -6,7 +6,8 @@
 // slice is route discovery ([G02] §3.1): the FANT flood, the BANT answer, the
 // pheromone trails they lay, evaporation and the deterministic next-hop
 // choice, and the discovery retries of the 2026-11-10 decisions (#4, #5).
-// Data reinforcement, duplicate errors and route-failure backtracking
+// The second is route maintenance by data ([G02] §3.2): every data hop adds
+// Δϕ toward both ends. Duplicate errors and route-failure backtracking
 // ([G02] §3.2, §3.3) are the next slices.
 //
 // The router never touches a simulator (golden rule 10). Time, randomness and
@@ -55,6 +56,19 @@ public:
     /// runs, the packet counts as demand for its next retry (#5).
     AntDecision onLocalData(NodeAddress dest);
 
+    /// Route maintenance by data ([G02] §3.2, fidelity "Route maintenance by
+    /// data"): this node, the source or a relay, hands a data packet for
+    /// `dest` to its neighbour `next`, and adds Δϕ to (dest, next).
+    void onDataSent(NodeAddress dest, NodeAddress next);
+
+    /// The other half: a data packet from `source` arrived from the neighbour
+    /// `prev` (at a relay or at the destination), which adds Δϕ to
+    /// (source, prev). A deposit on a missing entry creates it at Δϕ (a
+    /// reading accepted by the maintainer on 2026-11-11,
+    /// https://github.com/swarm-routing/ARA/issues/5#issuecomment-6783812825);
+    /// the table's cap refuses it when full.
+    void onDataReceived(NodeAddress source, NodeAddress prev);
+
     /// An ant arrived from the one-hop neighbour `from`.
     void onAnt(const AntMessage& ant, NodeAddress from);
 
@@ -99,6 +113,7 @@ private:
     void age();
     NodeAddress bestHop(NodeAddress dest) const;
     void layTrail(NodeAddress toward, NodeAddress over, std::uint8_t hops);
+    void reinforce(NodeAddress toward, NodeAddress over);
     void onForwardAnt(const AntMessage& ant, NodeAddress from);
     void onBackwardAnt(const AntMessage& ant, NodeAddress from);
     void startDiscovery(NodeAddress dest);
