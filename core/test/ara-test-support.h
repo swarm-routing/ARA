@@ -129,10 +129,14 @@ public:
         if (it == routers_.end()) {
             auto r = std::make_unique<Router>(a, config_, events_, rng_, events_,
                                               [this, a](const AntDecision& d) { emit(a, d); });
+            r->setObserver(observer_);
             it = routers_.emplace(a, std::move(r)).first;
         }
         return *it->second;
     }
+    /// Every router created from now on reports to `observer` (set it before
+    /// the first addLink or node call).
+    void observe(swarm::core::IRouterObserver* observer) { observer_ = observer; }
     EventQueue& events() { return events_; }
     SeededRng& rng() { return rng_; }
     const std::vector<std::string>& trace() const { return trace_; }
@@ -164,6 +168,7 @@ private:
     SeededRng rng_;
     Config config_;
     Time linkDelay_;
+    swarm::core::IRouterObserver* observer_ = nullptr;
     std::map<NodeAddress, std::unique_ptr<Router>> routers_;
     std::map<NodeAddress, std::set<NodeAddress>> links_;
     std::vector<std::string> trace_;

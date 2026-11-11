@@ -18,11 +18,20 @@
 //    base sends a packet with no next hop to its deferred queue and calls
 //    StartDiscovery, which discards it at once through its error callback.
 //  - data in transit: core::Router::nextHop, the highest-pheromone neighbour;
-//    none drops the packet the same way. Data reinforcement, DUPLICATE_ERROR
-//    and route-failure backtracking ([G02] §3.2, §3.3) arrive with the core's
-//    next slices; until then the adapter neither reinforces nor reacts to a
-//    link failure.
+//    none drops the packet the same way.
+//  - route maintenance by data ([G02] §3.2): every data packet this node
+//    hands to a next hop (OnDataForwarded, at the source and at each relay)
+//    goes to core::Router::onDataSent, and every data packet that arrives
+//    from a neighbour (OnDataReceived, at a relay and at the destination) to
+//    core::Router::onDataReceived. DUPLICATE_ERROR and route-failure
+//    backtracking ([G02] §3.2, §3.3) arrive with the core's next slices;
+//    until then the adapter does not react to a link failure.
 //  - ants: the core's Broadcast and Unicast decisions, as one-hop UDP sends.
+//  - the observer: the core reports through SwarmRoutingBase::Observer()
+//    (ControlTx/ControlRx/RouteChanged/DataDecision/StateSize trace sources,
+//    GetRouterStats), and the FANT/BANT kind names are registered with the
+//    TypeId. Transit data asks core::Router::onTransitData; at the
+//    destination, OnDataReceived reports the core's Deliver.
 #ifndef ARA_ROUTING_PROTOCOL_H
 #define ARA_ROUTING_PROTOCOL_H
 
@@ -68,6 +77,8 @@ protected:
                               Ptr<const Packet> p) override;
     void StartDiscovery(Ipv4Address dst) override;
     void RecvControl(Ptr<Packet> p, Ipv4Address from, Ipv4Address receiver) override;
+    bool OnDataReceived(Ptr<const Packet> p, const Ipv4Header& header, Ipv4Address prev) override;
+    void OnDataForwarded(Ptr<const Packet> p, const Ipv4Header& header, Ipv4Address next) override;
 
 private:
     /// The core's clock port. Clock() is const and the router takes a

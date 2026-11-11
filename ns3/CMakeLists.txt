@@ -53,7 +53,9 @@ build_lib(
   TEST_SOURCES
     ${ara_core_dir}/test/all-tests.cc
     ${ara_core_dir}/test/test-ant-codec.cc
+    ${ara_core_dir}/test/test-maintenance.cc
     ${ara_core_dir}/test/test-network.cc
+    ${ara_core_dir}/test/test-observer.cc
     ${ara_core_dir}/test/test-router.cc
     test/ara-test-suite.cc
 )
