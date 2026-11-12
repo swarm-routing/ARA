@@ -43,7 +43,7 @@ from.
 | BMJ98 | Broch et al., *A performance comparison of multi-hop wireless ad hoc network routing protocols*, Proceedings of the 4th annual ACM/IEEE international conference on Mobile computing and networking, 1998, pp. 85–97 | <https://doi.org/10.1145/288235.288256> |
 | G02 | Gunes, Sorges & Bouazizi, *ARA-the ant-colony based routing algorithm for MANETs*, Proceedings. International Conference on Parallel Processing Workshop, 2002, pp. 79–85 | <https://doi.org/10.1109/icppw.2002.1039715> |
 | R05 | Roth, *Termite: A Swarm Intelligent Routing Algorithm For Mobile Wireless Ad-Hoc Networks*, PhD thesis, Cornell University, 2005 | <https://hdl.handle.net/1813/240> |
-| swarm-core | Joppi, *ns3-swarm-core*, version v0.1.0, Zenodo, 2026 | <https://doi.org/10.5281/zenodo.24138628> |
+| SwarmCore | Joppi, *ns3-swarm-core*, Zenodo, 2026 | <https://doi.org/10.5281/zenodo.24138628> |
 <!-- fidelity:sources:end -->
 
 The table is generated from [`docs/references.bib`](references.bib) by
