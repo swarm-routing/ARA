@@ -30,7 +30,7 @@ description = "ARA, the Ant-Colony-Based Routing Algorithm (Güneş, Sorges & Bo
 homepage = "https://swarm-routing.github.io/arena/ARA/"
 topics = ["ara", "ant-colony-optimization", "aco", "swarm-intelligence", "manet", "ad-hoc-routing", "routing-protocol", "ns-3", "network-simulation"]
 ruleset = "protocol"
-required_checks = ["check / org-sync", "title / title", "headers / licence", "core", "ci / ns-latest debug", "ci / ns-latest sanitized", "ci / format", "swarm-core / pin"]
+required_checks = ["check / org-sync", "title / title", "headers / licence", "core", "ci / ns-latest debug", "ci / ns-latest sanitized", "ci / format", "swarm-core / pin", "review / coderabbit"]
 # Merge through a merge queue (swarm-routing/.github#130); every workflow behind a required
 # check also runs on merge_group.
 merge_queue = true
