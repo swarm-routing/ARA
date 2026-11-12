@@ -37,6 +37,21 @@ Condensed from [andrej-karpathy-skills](https://github.com/forrestchang/andrej-k
 - **Verifiable goals:** a bug gets a reproducing test first; a refactor passes
   before and after. Finish when the check passes, not when the code looks right.
 
+## Session habits
+
+- **Attach only the repositories the task needs.** Each attached repository's
+  agent files are loaded into every request, whether the task touches it or
+  not.
+- **Start from the record, not from memory:** the newest open `handoff` issue,
+  then the issue's acceptance criteria, then `main`. Check a claim against its
+  source before it goes into an issue or a PR.
+- **Script what repeats.** A check or a lookup run more than a few times
+  becomes a script in `tools/` that prints a summary; the model reads the
+  verdict, not the raw data (AntHocNet ADR-0014).
+- **Measure before cutting or adding agent text:** the `token-audit` skill
+  (`swarm-routing/skills` `tools/token-audit/token_audit.py`) prints what a
+  session loads and where a finished session's tokens went.
+
 ## Response style — caveman (token economy)
 
 Answer in tight, low-filler prose: drop hedging, pleasantries, and preamble; keep
@@ -59,17 +74,29 @@ because the issue threads were thorough. Caveman the chat, not the record.
   acceptance criteria remain open.
 - Before saying a tool or check is missing, look at `main` (`git fetch`,
   `origin/main`), not a stale local checkout.
+- In an issue, PR or comment, write every issue of another repository in
+  full, `swarm-routing/<repo>#N`, also inside a list or a range. A bare `#N`
+  links to the repository the text is in: in
+  `swarm-routing/AntHocNet#65, #151` the second number points at this
+  repository's #151 (swarm-routing/.github#277).
+- A sentence in `ROADMAP.md` or an AGENTS.md that calls an issue done is not
+  evidence: read the issue's acceptance criteria. On 2026-11-12 nine issues
+  described as done had open criteria (swarm-routing/.github#274).
 - Change text inside `org-sync:begin/end` markers only through the template
   in `swarm-routing/.github` `templates/`: one PR there, then org-bot's
   `bot/org-sync` refresh PR in each repository. A hand edit per repository
   stays red on `check / org-sync` (swarm-routing/.github#236).
 - In a repository with a merge queue, merge by enabling auto-merge (squash);
   a direct merge (`PUT pulls/<n>/merge`) is refused with HTTP 405. Only the
-  required checks (`gh api repos/<owner>/<repo>/rules/branches/main`) gate a
-  merge: a red or pending report-only check (`codecov/patch`, Sonar) is
-  triaged, not waited on. A red `dco` on an outside contributor's commit
-  still holds the PR until that author signs off; on the maintainer's or an
-  agent's commits it is expected (swarm-routing/.github#212).
+  required checks (`gh api 'repos/{owner}/{repo}/rules/branches/main'`, which
+  `gh` fills from the checkout) gate a merge: a red or pending report-only
+  check (`codecov/patch`, Sonar) is triaged, not waited on. A red `dco` on an
+  outside contributor's commit still holds the PR until that author signs
+  off; on the maintainer's or an agent's commits it is expected
+  (swarm-routing/.github#212). `dco` is not a required check and runs on
+  `pull_request` only, so merge an outside contributor's PR, by auto-merge or
+  directly, only after `dco` passed on the head commit that merges, and
+  disable auto-merge before anyone pushes to that PR.
 - Enable auto-merge only after CodeRabbit has reviewed and its threads are
   resolved: it is not a required check, so auto-merge does not wait for it.
   `python3 -I ../.github/tools/pr-status/pr_status.py wait --review REPO#N`
@@ -80,10 +107,14 @@ because the issue threads were thorough. Caveman the chat, not the record.
   DCO sign-off is a person's own certification (CONTRIBUTING "Outside
   contributions").
 - Releases are cut on request only: dispatch the release `bump` when the
-  maintainer asks, once the version's `release:vX.Y.Z` issues are done; never
-  approve a gated publish. A failed publish is recovered with "Re-run all
-  jobs", never "Re-run failed jobs" (CONTRIBUTING "Cutting a release"). Never
-  type a DOI: read it from Zenodo.
+  maintainer asks, once the version's `release:vX.Y.Z` issues are done and
+  its exit criteria in the ladder (`docs/roadmap.md`, or the org ROADMAP's
+  release train until it lands) are met; never approve a gated publish. A
+  failed publish is recovered with "Re-run all jobs", never "Re-run failed
+  jobs" (CONTRIBUTING "Cutting a release"). Never type a release's DOI: read
+  it from Zenodo.
 - Cite a paper in a public issue, PR or doc by its `https://doi.org/<DOI>`
-  link, and never point into or name the private paper library there.
+  link, read from its record (`lit-search` confirms it), or, for a work with
+  no DOI, by its publisher's or institution's page; never point into or name
+  the private paper library there.
 <!-- org-sync:end org -->
