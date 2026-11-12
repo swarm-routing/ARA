@@ -36,20 +36,37 @@ from.
 
 ## Sources
 
-| Key | Citation | Access |
+<!-- fidelity:sources:begin -->
+| Key | Citation | Link |
 |---|---|---|
-| G02 | M. Güneş, U. Sorges, I. Bouazizi, *ARA – The Ant-Colony Based Routing Algorithm for MANETs*, Proc. International Conference on Parallel Processing Workshops (IWAHN 2002, Vancouver, 18–21 August 2002), pp. 79–85, 2002, DOI 10.1109/ICPPW.2002.1039715 (Crossref, Semantic Scholar and OpenAlex agree on title, authors, year, venue and pages; `lit_search.py confirm`, 2026-11-10) | in hand |
-| R05 | M. H. Roth, *Termite: A Swarm Intelligent Routing Algorithm for Mobile Wireless Ad-Hoc Networks*, PhD dissertation, Cornell University, 2005; §3.5.2 restates ARA (pp. 59–60) and the 2003 "ARA2" (pp. 60–62). Secondary | in hand |
-| AR12 | M. Arif, T. Rani, *ACO Based Routing for MANETs*, International Journal of Wireless & Mobile Networks 4(2):163–174, 2012, arXiv:1205.1604 (OpenAlex; arXiv has no Crossref record); §4.2 restates ARA, §4.3 its EARA variant. Secondary | in hand |
-| GKB03 | M. Güneş, M. Kähmer, I. Bouazizi, *Ant-Routing-Algorithm (ARA) for Mobile Multi-Hop Ad-Hoc Networks – New Features and Results*, Second Mediterranean Workshop on Ad-Hoc Networks (Med-Hoc-Net 2003), Mahdia, pp. 9–20 (no DOI). The follow-up ("ARA2"); **not held** (no copy online; ask the authors). No row cites it directly | author |
+| AR12 | Arif & Rani, *ACO Based Routing for MANETs*, International Journal of Wireless & Mobile Networks 4(2), 2012, pp. 163–174 | <https://doi.org/10.5121/ijwmn.2012.4211> |
+| BMJ98 | Broch et al., *A performance comparison of multi-hop wireless ad hoc network routing protocols*, Proceedings of the 4th annual ACM/IEEE international conference on Mobile computing and networking, 1998, pp. 85–97 | <https://doi.org/10.1145/288235.288256> |
+| G02 | Gunes, Sorges & Bouazizi, *ARA-the ant-colony based routing algorithm for MANETs*, Proceedings. International Conference on Parallel Processing Workshop, 2002, pp. 79–85 | <https://doi.org/10.1109/icppw.2002.1039715> |
+| R05 | Roth, *Termite: A Swarm Intelligent Routing Algorithm For Mobile Wireless Ad-Hoc Networks*, PhD thesis, Cornell University, 2005 | <https://hdl.handle.net/1813/240> |
+| swarm-core | Joppi, *ns3-swarm-core*, version v0.1.0, Zenodo, 2026 | <https://doi.org/10.5281/zenodo.24138628> |
+<!-- fidelity:sources:end -->
+
+The table is generated from [`docs/references.bib`](references.bib) by
+`fidelity.py bib sources`: change an entry there, never here. [G02] is the
+paper this sheet follows. [R05] §3.5.2 restates ARA (pp. 59–60) and the 2003
+"ARA2" (pp. 60–62); [AR12] §4.2 restates ARA and §4.3 its EARA variant; both
+are secondary. [BMJ98] is the traffic reference [G02] §4.2 cites.
+`swarm-core` is the org release `core/` and `ns3/` build on.
+
+The follow-up paper ("ARA2"), M. Güneş, M. Kähmer, I. Bouazizi,
+*Ant-Routing-Algorithm (ARA) for Mobile Multi-Hop Ad-Hoc Networks – New
+Features and Results*, Second Mediterranean Workshop on Ad-Hoc Networks
+(Med-Hoc-Net 2003), Mahdia, pp. 9–20, has no DOI and no registry or
+publisher record that confirms it (`lit_search.py confirm --title`,
+2026-11-12), so it is not in the bibliography; it was not read, and no row
+cites it.
 
 Also read, and setting nothing: S. A. Thakare, S. A. Ladhake, *Performance
 Comparison of ARA Protocol with DSR and AODV Protocol*, Software Engineering
-3(1):17–20, 2012 (in the library) restates [G02] §3 without any constant.
-A Crossref search for other ARA papers by Güneş (2026-11-10) found none
-besides [G02]; [GKB03] is the only known follow-up. The traffic reference
-[G02] cites, Broch et al., MobiCom 1998 (DOI 10.1145/288235.288256), is not in
-the library (listed in its `MANUAL-DOWNLOADS.md`).
+3(1):17–20, 2012, restates [G02] §3 without any constant (no DOI found in
+Crossref, so not in the bibliography). A Crossref search for other ARA papers
+by Güneş (2026-11-10) found none besides [G02]; the Med-Hoc-Net 2003 paper
+above is the only known follow-up. [BMJ98] was not read.
 
 ## Which version of ARA
 
@@ -57,9 +74,9 @@ Two versions exist:
 
 - **ARA (2002)**, [G02] §3: the protocol this sheet describes, and the one
   whose ns-2 results ([G02] §4, Figs. 4–9) give the anchor.
-- **ARA2 (2003)**, [GKB03]: probabilistic data forwarding, continuous
+- **ARA2 (2003)**, the Med-Hoc-Net 2003 follow-up (Sources): probabilistic data forwarding, continuous
   pheromone decay, ant priority over data, backward-ant flooding, data
-  buffering during discovery, neighbour eavesdropping. We do not hold the
+  buffering during discovery, neighbour eavesdropping. We have not read the
   paper; what we know of it is Roth's summary, [R05] pp. 60–62, which says
   several of these are given without implementation detail.
 
@@ -141,13 +158,13 @@ the ones v2.5.0's anchor ran with, re-used by the maintainer's decision on #4
 | Area | 1500 m × 300 m | [G02] §4.1 | |
 | MAC | IEEE 802.11 | [G02] §4.1 | Rate, radio range and propagation not given |
 | 802.11 data rate | 2 Mbit/s | repo choice: v2.5.0's anchor (`--scenario=paper`, the harness's default `constant2`), re-used by the 2026-11-09 decision on #4, accepted by the maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4) | [G02] §4.1 does not give it |
-| Radio range and propagation | 300 m, disk (range) model | repo choice: v2.5.0's anchor (`--scenario=paper`), re-used by the 2026-11-09 decision on #4, accepted by the maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4) | [G02] §4.1 does not give it. The harness calls the preset the Broch et al. 1998 field; not checked against that paper (not held) |
+| Radio range and propagation | 300 m, disk (range) model | repo choice: v2.5.0's anchor (`--scenario=paper`), re-used by the 2026-11-09 decision on #4, accepted by the maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4) | [G02] §4.1 does not give it. The harness calls the preset the [BMJ98] field; not checked against that paper (not read) |
 | Mobility | random waypoint, maximum speed 10 m/s | [G02] §4.1 | |
 | Minimum speed | 1 m/s | repo choice: v2.5.0's anchor (`--scenario=paper` default), re-used by the 2026-11-09 decision on #4, accepted by the maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4) | [G02] §4.1 gives the maximum only |
 | Pause times | 0, 30, 60, 120, 300, 600, 900 s | [G02] §4.1 | 0 s moves constantly; 900 s is static. v2.5.0's anchor ran 0, 30, 120, 600 |
 | Simulated time | 900 s | [G02] §4.1 | |
-| Traffic | 10 CBR connections | [G02] §4.2 | "parameters similar to those in [2]" (Broch et al., MobiCom 1998) |
-| CBR packet size and rate | 64 bytes, 1 packet/s (512 bit/s) per flow, sources started in [0, 180] s | repo choice: v2.5.0's anchor (`--scenario=paper`), re-used by the 2026-11-09 decision on #4, accepted by the maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4) | [G02] §4.2 only says "similar to" Broch et al. 1998, which is not in the library; these values are not claimed as Broch's or as [G02]'s |
+| Traffic | 10 CBR connections | [G02] §4.2 | "parameters similar to those in [2]" ([BMJ98]) |
+| CBR packet size and rate | 64 bytes, 1 packet/s (512 bit/s) per flow, sources started in [0, 180] s | repo choice: v2.5.0's anchor (`--scenario=paper`), re-used by the 2026-11-09 decision on #4, accepted by the maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4) | [G02] §4.2 only says "similar to" [BMJ98], which was not read; these values are not claimed as Broch's or as [G02]'s |
 | Runs per point | 10 | [G02] §4.2, Fig. 5 | The anchor run uses ≥ 20 paired seeds (org rule 6; maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4)) |
 | Confidence interval | 95 % (α = 0.05) | [G02] Fig. 5, Fig. 7, Fig. 9 | |
 | Overhead metrics | routing bits / data bits; routing packets | [G02] Fig. 6, Fig. 8 | |
