@@ -49,7 +49,8 @@ Each release also has its own **version DOI**, listed on [its Zenodo record](htt
 
 Please also cite the work it builds on:
 
-- M. Güneş, U. Sorges, I. Bouazizi, *ARA-the ant-colony based routing algorithm for MANETs*, Proceedings. International Conference on Parallel Processing Workshop, pp. 79–85, 2002, [doi:10.1109/ICPPW.2002.1039715](https://doi.org/10.1109/ICPPW.2002.1039715). The algorithm this repository implements; docs/fidelity.md maps each of its sections to the code and marks the repository choices.
+- M. Gunes, U. Sorges, I. Bouazizi, *ARA-the ant-colony based routing algorithm for MANETs*, Proceedings. International Conference on Parallel Processing Workshop, pp. 79–85, 2002, [doi:10.1109/icppw.2002.1039715](https://doi.org/10.1109/icppw.2002.1039715). The algorithm this repository implements; docs/fidelity.md maps each of its sections to the code and marks the repository choices.
+- D. H. Joppi, *ns3-swarm-core*, 2026, [doi:10.5281/zenodo.24138628](https://doi.org/10.5281/zenodo.24138628). The shared swarm-routing primitives core/ builds on (pinned by SWARM_CORE_REF) and the ns-3 glue the ara module derives from.
 
 What this implementation reproduces from its sources, and every deliberate deviation, is in [docs/fidelity.md](docs/fidelity.md).
 
