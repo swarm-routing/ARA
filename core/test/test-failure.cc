@@ -87,6 +87,9 @@ void TestFailureBacktracks(Checker& c) {
     s.router.admitData(DataKey{9, 1, 17, 3}, 6);
     c.check(s.router.onRouteFailure(DataKey{9, 1, 17, 1}, 2).decision.action == RouteAction::Drop,
             "the history is bounded: the oldest previous hop was evicted");
+    const FailureDecision told = s.router.onRouteFailure(DataKey{9, 1, 17, 1}, 2, 6);
+    c.check(told.decision.nextHop == 6 && told.backtrack,
+            "…unless the caller knows the hop it came from (the MAC's report)");
     c.check(s.router.admitData(DataKey{9, 1, 17, 1}, 6), "…and its key is new again");
 }
 

@@ -124,7 +124,12 @@ public:
     /// the source, with no trail left, a discovery starts and the packet is
     /// dropped (no buffering, #4); a relay that no longer knows the previous
     /// hop (evicted from the history) drops it.
-    FailureDecision onRouteFailure(const DataKey& key, NodeAddress failed);
+    /// `cameFrom`: the hop the caller knows the packet came from (the MAC's
+    /// report carries it), used when the history no longer holds the key, so
+    /// a packet that waited at the MAC past the history's cap still finds its
+    /// way back; kInvalidAddress when the caller does not know.
+    FailureDecision onRouteFailure(const DataKey& key, NodeAddress failed,
+                                   NodeAddress cameFrom = swarm::core::kInvalidAddress);
 
     /// The neighbour with the highest pheromone toward `dest` (ties: the
     /// lowest address), or kInvalidAddress when there is no trail. Fidelity

@@ -150,11 +150,16 @@ bool RoutingProtocol::OnDataReceived(Ptr<const Packet> p, const Ipv4Header& head
 }
 
 void RoutingProtocol::OnDataUndelivered(Ptr<const Packet> p, const Ipv4Header& header,
-                                        Ipv4Address failedNext, Ipv4Address /*prev*/) {
-    // [G02] §3.3: the MAC gave up on `failedNext`. The core knows the hop the
-    // packet came from (its data history), so the base's `prev` is not needed.
+                                        Ipv4Address failedNext, Ipv4Address prev) {
+    // [G02] §3.3: the MAC gave up on `failedNext`. The core's data history
+    // knows the hop the packet came from; the base's `prev` (from the
+    // previous-hop tag, 0.0.0.0 at the source) covers a key the history has
+    // evicted while the packet waited at the MAC.
     if (m_router && failedNext != Ipv4Address()) {
-        CarryOut(m_router->onRouteFailure(KeyOf(header), ToNodeAddress(failedNext)), p, header);
+        CarryOut(m_router->onRouteFailure(KeyOf(header), ToNodeAddress(failedNext),
+                                          prev == Ipv4Address() ? swarm::core::kInvalidAddress
+                                                                : ToNodeAddress(prev)),
+                 p, header);
     }
 }
 
