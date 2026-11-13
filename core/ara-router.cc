@@ -34,12 +34,31 @@ NodeAddress Router::ReversePointers::find(NodeAddress source, std::uint32_t sequ
     return it != hops_.end() ? it->second : kInvalidAddress;
 }
 
+Router::DataHistory::DataHistory(std::size_t capacity)
+    : capacity_(std::max<std::size_t>(capacity, 1)) {}
+
+bool Router::DataHistory::record(const DataKey& key, NodeAddress previousHop) {
+    if (!hops_.emplace(key, previousHop).second) return false;
+    order_.push_back(key);
+    while (order_.size() > capacity_) {
+        hops_.erase(order_.front());
+        order_.pop_front();
+    }
+    return true;
+}
+
+NodeAddress Router::DataHistory::find(const DataKey& key) const {
+    const auto it = hops_.find(key);
+    return it != hops_.end() ? it->second : kInvalidAddress;
+}
+
 Router::Router(NodeAddress self, const Config& config, swarm::core::IClock& clock,
                swarm::core::IRng& rng, swarm::core::ITimerScheduler& timers, Sink sink)
     : self_(self), config_(config), clock_(clock), rng_(rng), timers_(timers),
       sink_(std::move(sink)), table_(config.pheromoneCapacity),
       fantHistory_(config.historyCapacity), bantHistory_(config.historyCapacity),
-      reverse_(config.historyCapacity), lastAged_(clock.now()) {}
+      reverse_(config.historyCapacity), dataHistory_(config.historyCapacity),
+      lastAged_(clock.now()) {}
 
 // Fidelity "Evaporation by eq. 2": ϕ := (1 − q)·ϕ per period, evaluated
 // continuously as ϕ·(1 − q)^(Δt / period) whenever the table is read or
@@ -298,6 +317,48 @@ void Router::onTimeout(NodeAddress dest, std::uint32_t sequence) {
     // Locals, not `d`: the sink may reach back into this router.
     sendFant(dest, next);
     scheduleTimeout(dest, next, retries);
+}
+
+// --- loop prevention and route failure ([G02] §3.2, §3.3) ----------------------
+
+bool Router::admitData(const DataKey& key, NodeAddress prev) {
+    return dataHistory_.record(key, prev);
+}
+
+void Router::onDuplicateError(NodeAddress dest, NodeAddress from) {
+    // Fidelity "Loop prevention": the sender of the duplicate deactivates
+    // that link. The packet itself is a copy of one still on its way: dropped.
+    age();
+    dropTrail(dest, from);
+}
+
+FailureDecision Router::onRouteFailure(const DataKey& key, NodeAddress failed) {
+    const NodeAddress dest = key.dest;
+    age();
+    dropTrail(dest, failed);  // fidelity "On a failed link": its ϕ to 0
+    if (const NodeAddress hop = bestHop(dest); hop != kInvalidAddress) {
+        return {decided({swarm::core::RouteAction::Unicast, hop, std::nullopt}, dest), false};
+    }
+    // Fidelity "No other link": back to the previous hop (#15), up to the source.
+    if (const NodeAddress prev = dataHistory_.find(key); prev != kInvalidAddress) {
+        return {decided({swarm::core::RouteAction::Unicast, prev, std::nullopt}, dest), true};
+    }
+    if (key.source == self_) {
+        if (auto it = discoveries_.find(dest); it != discoveries_.end()) {
+            it->second.demand = true;
+        } else {
+            startDiscovery(dest);
+        }
+    }
+    return {decided(AntDecision::drop(), dest), false};
+}
+
+void Router::dropTrail(NodeAddress dest, NodeAddress over) {
+    if (!table_.erase(dest, over)) return;
+    if (observer_) {
+        observer_->onRouteChanged(dest, over, false);
+        reportState();
+    }
 }
 
 }  // namespace ara::core

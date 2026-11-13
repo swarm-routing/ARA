@@ -10,7 +10,7 @@ namespace ara::core::test {
 
 namespace {
 
-constexpr std::array<NamedTest, 18> kTests{{
+constexpr std::array<NamedTest, 23> kTests{{
     {"ant codec: roundtrip", TestAntRoundtrip},
     {"ant codec: the decoder fails closed", TestAntDecoderFailsClosed},
     {"ant codec: seeded fuzz", TestAntFuzz},
@@ -29,6 +29,11 @@ constexpr std::array<NamedTest, 18> kTests{{
     {"data: one packet a second keeps both trails alive", TestDataKeepsTrailsAlive},
     {"observer: every callback, from a recording observer", TestObserverCallbacks},
     {"observer: reads only, same decisions and trace with one", TestObserverIsReadOnly},
+    {"duplicates: a seen key is a loop; DUPLICATE_ERROR drops that link", TestDuplicateData},
+    {"route failure: the failed link is dropped, another trail taken", TestFailureTakesAnotherLink},
+    {"route failure: no other trail, back to the previous hop", TestFailureBacktracks},
+    {"route failure: at the source, a new discovery", TestFailureAtSourceRediscovers},
+    {"route failure: backtracking on a diamond, end to end", TestBacktrackOnADiamond},
 }};
 
 }  // namespace
