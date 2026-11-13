@@ -19,14 +19,17 @@ work stands.
   `SwarmRoutingBase` (#96, #98); the core reports through swarm-core's
   `IRouterObserver`. Every rule names its `docs/fidelity.md` row.
 - **What remains of #5: the anchor** (the third gate of org rule 6).
-  `tools/bench/campaigns/anchor-2.yaml` is pre-registered at `source_sha`
-  274fd1d (the commit that merges #111), swarm-core 501dd7e and routing-bench
-  3d279b8, the commits `benchmark-cell.yml` on `main` builds (maintainer
-  decision 2026-11-13, #105), and reads ARA minus AODV
-  (swarm-routing/ns3-tools#152). It has not been dispatched.
-  `tools/bench/check_plan_deps.py` passes on it and must pass again right
-  before the dispatch. It supersedes `anchor.yaml` (`source_sha` c7d6acb,
-  #101; it named swarm-core 0919dbf), never dispatched and kept as the record.
+  No plan is cleared for dispatch. `tools/bench/campaigns/anchor.yaml`, the
+  first pre-registration (`source_sha` c7d6acb, #101; it reads ARA minus AODV,
+  swarm-routing/ns3-tools#152), is superseded and was never dispatched: it
+  names swarm-core 0919dbf, which its cells would not have built. It is kept
+  unchanged as the record. swarm-core's `core/` changed again
+  (swarm-routing/ns3-swarm-core#104), so the pin moved to 6966421, in
+  `benchmark-cell.yml` too. The anchor is pre-registered anew in a follow-up
+  PR, as a new plan at the `source_sha` that merges that pin bump and at
+  swarm-core 6966421 (maintainer decision 2026-11-13, #105).
+  `tools/bench/check_plan_deps.py` must pass on that plan when it is
+  pre-registered and again right before the dispatch.
 - **Gates.** Fidelity sheet: written (`docs/fidelity.md`). Per-PR delivery
   smoke: in `.github/workflows/ns3.yml`. Anchor: pending, so no number from
   this repository counts as a benchmark result yet (README "Release status").
