@@ -19,6 +19,7 @@
 #include "ns3/header.h"
 #include "ns3/packet.h"
 #include "ns3/ptr.h"
+#include "ns3/tag.h"
 
 #include <optional>
 
@@ -56,6 +57,35 @@ Ptr<Packet> MakeAntPacket(const core::AntMessage& ant);
 /// The ant a received control payload carries, or nullopt when the payload
 /// is not exactly one valid ant (core::decodeAnt's rules).
 std::optional<core::AntMessage> DecodeAntPacket(Ptr<const Packet> p);
+
+/// A data packet's ARA flag ([G02] §3.2, §3.3): Backtrack (no other trail
+/// at the sender, which returns the packet to the hop it came from) or
+/// DuplicateError (the sender saw this packet before: a loop). A packet tag,
+/// simulator metadata with no bytes on the air (fidelity "Loop prevention",
+/// repo choice, maintainer decision 2026-11-13 on #5); a real implementation
+/// carries the flag in a data header.
+class DataFlagTag : public Tag {
+public:
+    enum Flag : uint8_t { None = 0, Backtrack = 1, DuplicateError = 2 };
+
+    DataFlagTag() = default;
+    explicit DataFlagTag(Flag f) : m_flag(f) {}
+
+    static TypeId GetTypeId();
+    TypeId GetInstanceTypeId() const override;
+    uint32_t GetSerializedSize() const override;
+    void Serialize(TagBuffer i) const override;
+    void Deserialize(TagBuffer i) override;
+    void Print(std::ostream& os) const override;
+
+    Flag Get() const { return m_flag; }
+
+private:
+    Flag m_flag = None;
+};
+
+/// The packet's flag, None when it carries none.
+DataFlagTag::Flag ReadDataFlag(Ptr<const Packet> p);
 
 }  // namespace ara
 }  // namespace ns3

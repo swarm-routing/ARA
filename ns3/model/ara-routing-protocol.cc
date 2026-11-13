@@ -94,20 +94,81 @@ void RoutingProtocol::StartDiscovery(Ipv4Address dst) {
     DiscardDeferred(dst);
 }
 
-bool RoutingProtocol::OnDataReceived(Ptr<const Packet> /*p*/, const Ipv4Header& header,
+namespace {
+
+core::DataKey KeyOf(const Ipv4Header& header) {
+    // Fidelity "Data packet 'sequence number' used for duplicate detection":
+    // (source, destination, IP protocol, IP identification), #4 and #5.
+    return core::DataKey{ToNodeAddress(header.GetSource()), ToNodeAddress(header.GetDestination()),
+                         header.GetProtocol(), header.GetIdentification()};
+}
+
+/// A copy of `p` carrying `flag` only (a resend drops the flag it came with).
+Ptr<Packet> Flagged(Ptr<const Packet> p, DataFlagTag::Flag flag) {
+    Ptr<Packet> q = p->Copy();
+    DataFlagTag old;
+    q->RemovePacketTag(old);
+    if (flag != DataFlagTag::None) {
+        q->AddPacketTag(DataFlagTag(flag));
+    }
+    return q;
+}
+
+}  // namespace
+
+bool RoutingProtocol::OnDataReceived(Ptr<const Packet> p, const Ipv4Header& header,
                                      Ipv4Address prev) {
+    if (!m_router) return true;
+    const swarm::core::NodeAddress dest = ToNodeAddress(header.GetDestination());
+    switch (ReadDataFlag(p)) {
+    case DataFlagTag::DuplicateError:
+        // [G02] §3.2: `prev` saw this packet before; that link goes. The copy
+        // is dropped: the original is still on its way.
+        m_router->onDuplicateError(dest, ToNodeAddress(prev));
+        return false;
+    case DataFlagTag::Backtrack:
+        // [G02] §3.3: `prev` had no other trail and sent the packet back.
+        CarryOut(m_router->onRouteFailure(KeyOf(header), ToNodeAddress(prev)), p, header);
+        return false;
+    case DataFlagTag::None:
+        break;
+    }
+    if (!m_router->admitData(KeyOf(header), ToNodeAddress(prev))) {
+        // [G02] §3.2: a loop. Back to the sender with DUPLICATE_ERROR.
+        ResendData(Flagged(p, DataFlagTag::DuplicateError), header, prev);
+        return false;
+    }
     // [G02] §3.2: the next hop strengthens the trail toward the source.
-    if (m_router) {
-        m_router->onDataReceived(ToNodeAddress(header.GetSource()), ToNodeAddress(prev));
-        // At the destination the base hands the packet up (no SelectNextHop):
-        // the core reports that decision (Deliver) here. A relay's decision is
-        // reported by SelectNextHop next.
-        const swarm::core::NodeAddress dest = ToNodeAddress(header.GetDestination());
-        if (dest == m_router->self()) {
-            (void)m_router->onTransitData(dest);
-        }
+    m_router->onDataReceived(ToNodeAddress(header.GetSource()), ToNodeAddress(prev));
+    // At the destination the base hands the packet up (no SelectNextHop):
+    // the core reports that decision (Deliver) here. A relay's decision is
+    // reported by SelectNextHop next.
+    if (dest == m_router->self()) {
+        (void)m_router->onTransitData(dest);
     }
     return true;
+}
+
+void RoutingProtocol::OnDataUndelivered(Ptr<const Packet> p, const Ipv4Header& header,
+                                        Ipv4Address failedNext, Ipv4Address /*prev*/) {
+    // [G02] §3.3: the MAC gave up on `failedNext`. The core knows the hop the
+    // packet came from (its data history), so the base's `prev` is not needed.
+    if (m_router && failedNext != Ipv4Address()) {
+        CarryOut(m_router->onRouteFailure(KeyOf(header), ToNodeAddress(failedNext)), p, header);
+    }
+}
+
+void RoutingProtocol::CarryOut(const core::FailureDecision& d, Ptr<const Packet> p,
+                               const Ipv4Header& header) {
+    if (d.decision.action != swarm::core::RouteAction::Unicast) {
+        return;  // Drop: at the source a discovery has started (no buffering, #4)
+    }
+    const Ipv4Address next = ToIpv4Address(d.decision.nextHop);
+    if (!d.backtrack) {
+        // Another trail toward the destination: a data hop like any other.
+        m_router->onDataSent(ToNodeAddress(header.GetDestination()), d.decision.nextHop);
+    }
+    ResendData(Flagged(p, d.backtrack ? DataFlagTag::Backtrack : DataFlagTag::None), header, next);
 }
 
 void RoutingProtocol::OnDataForwarded(Ptr<const Packet> p, const Ipv4Header& header,
