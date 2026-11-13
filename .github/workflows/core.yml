@@ -49,5 +49,7 @@ jobs:
             -DSWARM_CORE_DIR="$PWD/build/debug/_deps/swarm_core_src-src/core"
           cmake --build build/sanitized -j "$(nproc)"
           ctest --test-dir build/sanitized --output-on-failure
+      - name: The plan-dependency check's self-test (tools/bench/check_plan_deps.py, #105)
+        run: python3 -I tools/bench/check_plan_deps.py --self-test
       - name: Format (org .clang-format)
         run: git ls-files 'core/*.h' 'core/*.cc' | xargs clang-format-18 --style=file:.org/.clang-format --dry-run --Werror

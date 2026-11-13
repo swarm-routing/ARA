@@ -1,8 +1,9 @@
 // Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 //
-// Route discovery ([G02] §3.1), route maintenance by data ([G02] §3.2) and
-// their bookkeeping; see ara-router.h. Each
+// Route discovery ([G02] §3.1), route maintenance by data ([G02] §3.2), loop
+// prevention and route failure ([G02] §3.2, §3.3) and their bookkeeping; see
+// ara-router.h. Each
 // rule names the docs/fidelity.md row it implements.
 #include "ara-router.h"
 
@@ -15,13 +16,29 @@ namespace ara::core {
 
 using swarm::core::kInvalidAddress;
 
-Router::ReversePointers::ReversePointers(std::size_t capacity)
-    : capacity_(std::max<std::size_t>(capacity, 1)) {}
+namespace {
+
+// Fidelity "Ant and data dedup history size": an entry recorded at `at` is
+// expired from at + lifetime on, as in swarm-core's DedupHistory (against the
+// computed expiry time, so the exact boundary does not depend on rounding).
+bool expired(Time at, Time now, Time lifetime) {
+    return now >= at + lifetime;
+}
+
+}  // namespace
+
+Router::ReversePointers::ReversePointers(std::size_t capacity, Time lifetime)
+    : capacity_(std::max<std::size_t>(capacity, 1)), lifetime_(lifetime) {}
 
 void Router::ReversePointers::record(NodeAddress source, std::uint32_t sequence,
-                                     NodeAddress previousHop) {
+                                     NodeAddress previousHop, Time now) {
     const Key key{source, sequence};
-    if (!hops_.emplace(key, previousHop).second) return;
+    if (const auto it = hops_.find(key); it != hops_.end()) {
+        if (!expired(it->second.at, now, lifetime_)) return;
+        hops_.erase(it);  // expired: recorded afresh, as the newest
+        order_.erase(std::find(order_.begin(), order_.end(), key));
+    }
+    hops_.emplace(key, TimedHop{previousHop, now});
     order_.push_back(key);
     while (order_.size() > capacity_) {
         hops_.erase(order_.front());
@@ -29,16 +46,23 @@ void Router::ReversePointers::record(NodeAddress source, std::uint32_t sequence,
     }
 }
 
-NodeAddress Router::ReversePointers::find(NodeAddress source, std::uint32_t sequence) const {
+NodeAddress Router::ReversePointers::find(NodeAddress source, std::uint32_t sequence,
+                                          Time now) const {
     const auto it = hops_.find({source, sequence});
-    return it != hops_.end() ? it->second : kInvalidAddress;
+    if (it == hops_.end() || expired(it->second.at, now, lifetime_)) return kInvalidAddress;
+    return it->second.hop;
 }
 
-Router::DataHistory::DataHistory(std::size_t capacity)
-    : capacity_(std::max<std::size_t>(capacity, 1)) {}
+Router::DataHistory::DataHistory(std::size_t capacity, Time lifetime)
+    : capacity_(std::max<std::size_t>(capacity, 1)), lifetime_(lifetime) {}
 
-bool Router::DataHistory::record(const DataKey& key, NodeAddress previousHop) {
-    if (!hops_.emplace(key, previousHop).second) return false;
+bool Router::DataHistory::record(const DataKey& key, NodeAddress previousHop, Time now) {
+    if (const auto it = hops_.find(key); it != hops_.end()) {
+        if (!expired(it->second.at, now, lifetime_)) return false;
+        hops_.erase(it);  // expired: recorded afresh, as the newest
+        order_.erase(std::find(order_.begin(), order_.end(), key));
+    }
+    hops_.emplace(key, TimedHop{previousHop, now});
     order_.push_back(key);
     while (order_.size() > capacity_) {
         hops_.erase(order_.front());
@@ -47,18 +71,20 @@ bool Router::DataHistory::record(const DataKey& key, NodeAddress previousHop) {
     return true;
 }
 
-NodeAddress Router::DataHistory::find(const DataKey& key) const {
+NodeAddress Router::DataHistory::find(const DataKey& key, Time now) const {
     const auto it = hops_.find(key);
-    return it != hops_.end() ? it->second : kInvalidAddress;
+    if (it == hops_.end() || expired(it->second.at, now, lifetime_)) return kInvalidAddress;
+    return it->second.hop;
 }
 
 Router::Router(NodeAddress self, const Config& config, swarm::core::IClock& clock,
                swarm::core::IRng& rng, swarm::core::ITimerScheduler& timers, Sink sink)
     : self_(self), config_(config), clock_(clock), rng_(rng), timers_(timers),
       sink_(std::move(sink)), table_(config.pheromoneCapacity),
-      fantHistory_(config.historyCapacity), bantHistory_(config.historyCapacity),
-      reverse_(config.historyCapacity), dataHistory_(config.historyCapacity),
-      lastAged_(clock.now()) {}
+      fantHistory_(config.historyCapacity, config.historyLifetime),
+      bantHistory_(config.historyCapacity, config.historyLifetime),
+      reverse_(config.historyCapacity, config.historyLifetime),
+      dataHistory_(config.historyCapacity, config.historyLifetime), lastAged_(clock.now()) {}
 
 // Fidelity "Evaporation by eq. 2": ϕ := (1 − q)·ϕ per period, evaluated
 // continuously as ϕ·(1 − q)^(Δt / period) whenever the table is read or
@@ -226,10 +252,11 @@ void Router::onAnt(const AntMessage& ant, NodeAddress from) {
 
 void Router::onForwardAnt(const AntMessage& ant, NodeAddress from) {
     // Fidelity "FANT duplicates ... are destroyed": later copies change nothing.
-    if (!fantHistory_.record(ant.source, ant.sequence)) return;
+    const Time now = clock_.now();
+    if (!fantHistory_.record(ant.source, ant.sequence, now)) return;
     const auto hops = static_cast<std::uint8_t>(std::min<int>(ant.hops + 1, 255));
     layTrail(ant.source, from, hops);
-    reverse_.record(ant.source, ant.sequence, from);
+    reverse_.record(ant.source, ant.sequence, from, now);
 
     if (ant.destination == self_) {
         // Fidelity "Destination destroys the FANT and answers with a BANT",
@@ -255,7 +282,7 @@ void Router::onBackwardAnt(const AntMessage& ant, NodeAddress from) {
     // Keyed by the discovery, (FANT originator, FANT sequence), as the reverse
     // pointers are: sequences are per originator, so the BANT's own (source,
     // seq) would collide across discoveries toward one destination.
-    if (!bantHistory_.record(ant.destination, ant.sequence)) return;
+    if (!bantHistory_.record(ant.destination, ant.sequence, clock_.now())) return;
     const auto hops = static_cast<std::uint8_t>(std::min<int>(ant.hops + 1, 255));
     layTrail(ant.source, from, hops);
 
@@ -264,7 +291,7 @@ void Router::onBackwardAnt(const AntMessage& ant, NodeAddress from) {
         discoveries_.erase(ant.source);
         return;
     }
-    const NodeAddress back = reverse_.find(ant.destination, ant.sequence);
+    const NodeAddress back = reverse_.find(ant.destination, ant.sequence, clock_.now());
     if (back == kInvalidAddress || ant.ttl <= 1) return;
     AntMessage relay = ant;
     relay.hops = hops;
@@ -284,7 +311,7 @@ void Router::startDiscovery(NodeAddress dest) {
 // Fidelity "Forward ant (FANT): broadcast by the sender ... unique sequence
 // number". The source remembers its own FANT so that echoes are dropped.
 void Router::sendFant(NodeAddress dest, std::uint32_t sequence) {
-    fantHistory_.record(self_, sequence);
+    fantHistory_.record(self_, sequence, clock_.now());
     emit(AntDecision::broadcast(
         AntMessage{AntType::Forward, self_, dest, sequence, 0, config_.antTtl}));
 }
@@ -320,7 +347,7 @@ void Router::onTimeout(NodeAddress dest, std::uint32_t sequence) {
 // --- loop prevention and route failure ([G02] §3.2, §3.3) ----------------------
 
 bool Router::admitData(const DataKey& key, NodeAddress prev) {
-    return dataHistory_.record(key, prev);
+    return dataHistory_.record(key, prev, clock_.now());
 }
 
 void Router::onDuplicateError(NodeAddress dest, NodeAddress from) {
@@ -337,7 +364,7 @@ FailureDecision Router::onRouteFailure(const DataKey& key, NodeAddress failed,
     dropTrail(dest, failed);  // fidelity "On a failed link": its ϕ to 0
     // Another link, but not back where the packet came from: unflagged, the
     // previous hop would take it for a loop (DUPLICATE_ERROR) and drop it.
-    NodeAddress prev = dataHistory_.find(key);
+    NodeAddress prev = dataHistory_.find(key, clock_.now());
     if (prev == kInvalidAddress && cameFrom != self_) prev = cameFrom;
     if (const NodeAddress hop = bestHopExcept(dest, prev); hop != kInvalidAddress) {
         return {decided({swarm::core::RouteAction::Unicast, hop, std::nullopt}, dest), false};

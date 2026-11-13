@@ -24,6 +24,7 @@ void TestNextHopChoice(Checker& c);
 void TestRetryOnlyWithDemand(Checker& c);
 void TestRetryLimitAndDoubling(Checker& c);
 void TestHistoryCap(Checker& c);
+void TestHistoryLifetime(Checker& c);
 void TestDiscoveryOnALine(Checker& c);
 void TestDeterminism(Checker& c);
 void TestDataReinforcement(Checker& c);

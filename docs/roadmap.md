@@ -55,9 +55,7 @@ B and cannot ship before ns3-tools v0.2.0 and ns3-swarm-core v0.2.0.
 ```mermaid
 flowchart TB
     subgraph ARA["swarm-routing/ARA"]
-        I5["#5 rest of the core + ns-3 module<br/>(duplicate errors, route-failure backtracking)"]
-        I36["#36 pipeline + anchor"]
-        I51["#51 hot-path pheromone reads"]
+        I5["#5 the anchor verdict<br/>(the core and the ns-3 module are in)"]
         I27["#27 fidelity review vs ARA2 + Broch"]
         I50["#50 lazy decay, default off"]
         I99["#99 non-allocating headers, cancellable timers"]
@@ -74,11 +72,8 @@ flowchart TB
     end
 
     I5 --> V02
-    I36 --> V02
-    I51 --> V02
-    T02 --> I36
+    T02 --> I5
     S02 --> V02
-    I36 -.->|"anchor verdict"| V02
     V02 --> V03
     I27 --> V03
     I50 --> V03
@@ -98,7 +93,7 @@ flowchart TB
 | Release | Exit criteria |
 |---|---|
 | **v0.1.0** | The core's first slice (route discovery: FANT/BANT, trails, evaporation, next hop, discovery retries, the ant wire header) builds and tests alone and inside ns-3 as the contrib module `ara`, carried out on swarm-core's `SwarmRoutingBase`. **Shipped 2026-11-11** ([release v0.1.0](https://github.com/swarm-routing/ARA/releases/tag/v0.1.0)), ungated. |
-| **v0.2.0** "gated" | The module is green; swarm-core's router observer is adopted; ARA has its own benchmark pipeline; the anchor verdict is in (PASS, or a written infeasibility verdict); the fidelity open items are settled. Scope: the rest of [#5](https://github.com/swarm-routing/ARA/issues/5) (duplicate errors, route-failure backtracking), [#36](https://github.com/swarm-routing/ARA/issues/36) (paired smoke and anchor campaigns on the org reusable cell workflow), [#51](https://github.com/swarm-routing/ARA/issues/51) (hot-path pheromone reads off `entries()`, swarm-core#47). The observer item, [#41](https://github.com/swarm-routing/ARA/issues/41), is closed (its CI checks and adapter coverage landed), so it no longer gates. Needs ns3-tools v0.2.0 and ns3-swarm-core v0.2.0 (wave B). |
+| **v0.2.0** "gated" | The module is green; swarm-core's router observer is adopted; ARA has its own benchmark pipeline; the anchor verdict is in (PASS, or a written infeasibility verdict); the fidelity open items are settled. Scope: the rest of [#5](https://github.com/swarm-routing/ARA/issues/5): duplicate errors and route-failure backtracking are in (core and adapter), so its open item is the anchor verdict. [#36](https://github.com/swarm-routing/ARA/issues/36) (paired smoke and anchor campaigns on the org reusable cell workflow), [#51](https://github.com/swarm-routing/ARA/issues/51) (hot-path pheromone reads off `entries()`, swarm-core#47) and the observer item, [#41](https://github.com/swarm-routing/ARA/issues/41) (its CI checks and adapter coverage landed), are closed, so they no longer gate. Needs ns3-tools v0.2.0 and ns3-swarm-core v0.2.0 (wave B). |
 | **v0.3.0** "reviewed" | The paper-review issues, performance follow-ups and default-off A/Bs: [#27](https://github.com/swarm-routing/ARA/issues/27) (review the fidelity sheet against ARA2, Med-Hoc-Net 2003, and Broch et al., MobiCom 1998, once in hand), [#50](https://github.com/swarm-routing/ARA/issues/50) (lazy on-read pheromone decay behind a default-off switch, A/B against the eager sweep), [#99](https://github.com/swarm-routing/ARA/issues/99) (swarm-core's non-allocating header path and cancellable timers), [#100](https://github.com/swarm-routing/ARA/issues/100) (clear and restart on node shutdown, crash and start, on swarm-core's lifecycle hooks, so a failure benchmark never sees a restarted node's old trails). |
 | **v1.0.0** | Wire format and `core/` API frozen; paper-faithful with the deviations documented; the three gates passed (fidelity sheet, per-PR delivery smoke, anchor); green on the supported ns-3 release; a released run recorded in the benchmarks global suite. Follows ns3-swarm-core v1.0.0 (two gated protocols on it unchanged), and needs the release workflow's `increment` input for a major (a swarm-routing/.github ticket). |
 

@@ -7,7 +7,7 @@ before changing anything. Org-wide conventions:
 
 ## What this repo is
 
-**Status: `core/` and `ns3/` in progress (Phase 3, #5).** The core's first slice, route discovery (FANT/BANT, trails, evaporation, next hop, discovery retries, the ant wire header), builds and tests on its own and inside ns-3 as the contrib module `ara`, whose adapter carries it out on swarm-core's `SwarmRoutingBase`; data reinforcement, the router observer, and duplicate errors with route-failure backtracking ([G02] §3.2–3.3, core only) are in; the adapter wiring of the last (on swarm-core's `OnDataUndelivered`/`ResendData`) comes next, then the anchor.
+**Status: `core/` and `ns3/` in progress (Phase 3, #5).** The core's first slice, route discovery (FANT/BANT, trails, evaporation, next hop, discovery retries, the ant wire header), builds and tests on its own and inside ns-3 as the contrib module `ara`, whose adapter carries it out on swarm-core's `SwarmRoutingBase`; data reinforcement, the router observer, and duplicate errors with route-failure backtracking ([G02] §3.2–3.3) are in, and the adapter carries the last out on swarm-core's `OnDataUndelivered`/`ResendData` (#96, #98). What remains of #5 is the anchor verdict (`anchor.yaml`; its pin question is #105).
 
 ARA, the Ant-Colony-Based Routing Algorithm (Güneş, Sorges & Bouazizi, 2002),
 as a standalone hexagonal protocol: a simulator-agnostic `core/` and an ns-3
@@ -21,12 +21,20 @@ core/       simulator-agnostic algorithm + unit tests (no ns-3 headers; MIT OR G
   ara-config.h    the protocol constants, each citing its docs/fidelity.md row
   ara-router.*    per-node state and decisions (ports in, RouteDecisions out); reports ants sent and received, trail adds and
                   removes, data decisions and the trail table's size to an optional swarm-core IRouterObserver (setObserver)
-  test/           the core tests (plain CMake + ctest; the ns-3 suite will run the same list)
-ns3/        (planned) contrib module `ara` (GPL-2.0-only): header codec, adapter, helper, examples, test suite
+  test/           the core tests (plain CMake + ctest; the ns-3 suite runs the same list)
+ns3/        contrib module `ara` (GPL-2.0-only), compiling core/ on swarm-core
+  model/ara-header.*            AntHeader (core/'s ant codec as an ns3::Header) and DataFlagTag (a data packet's duplicate-error or backtrack flag)
+  model/ara-routing-protocol.*  the adapter: one core::Router per node on SwarmRoutingBase; converts and carries out, no constant of its own
+  helper/ara-helper.*           AraHelper (stack + protocol)
+  helper/ara-bench-arms.cc      the `ara` arm of ns3-tools' routing-bench (compiled only beside it)
+  examples/ara-example.cc       a small MANET; CI's determinism program
+  test/ara-test-suite.cc        test.py -s ara: the core tests, codec roundtrip + fuzz, delivery, backtracking, determinism
 docs/       fidelity sheet (paper section -> implementation), parameters with sources
 .github/workflows/core.yml   core/ alone: strict warnings, tests, ASan + UBSan, clang-format (check `core`)
+.github/workflows/ns3.yml    ns3/ in ns3-dev latest debug + sanitized (reusable-ns3-ci.yml; checks `ci / ns-latest debug`, `ci / ns-latest sanitized`, `ci / format`), the smoke and the determinism gate
 .github/workflows/swarm-core-pin.yml   the swarm-core pin is one SHA and current (check `swarm-core / pin`)
 .github/workflows/benchmark-cell.yml   one benchmark cell at a pinned source_sha (reusable-benchmark-cell.yml, build mode); dispatched by ns3-campaign
+tools/bench/check_plan_deps.py   a plan's source_sha and named dependency commits against benchmark-cell.yml's, before a dispatch and on collected cells (#105; --self-test)
 tools/bench/campaigns/   campaign plans: smoke.yaml (the change-test smoke against the base), anchor.yaml (the paper's trend, ARA vs AODV)
 ```
 
@@ -109,6 +117,20 @@ The dependency commits come from `benchmark-cell.yml` at the dispatch ref
 image: do not merge a change to that file's `dependencies` while a campaign
 is in flight, and the `grep` above (one swarm-core and one routing-bench
 commit across every cell) is the check that none did.
+Before a dispatch, the plan and that file must already agree (#105):
+`python3 -I tools/bench/check_plan_deps.py P.yaml` reads `benchmark-cell.yml`
+at the plan's dispatch ref and fails unless `core/CMakeLists.txt` at every
+`source_sha` pins the swarm-core commit the cells would build
+(`SWARM_CORE_REF`), and the plan names each dependency as `<name>@<commit>`
+(swarm-core and routing-bench) with the commits the workflow builds. Run it
+when a plan is pre-registered and again right before `dispatch`; if a pin bump
+merged in between, the plan is stale: pre-register a new one (new
+`generation`, a `source_sha` at or after the bump), never edit the old. After
+`collect`, the same command with `--cells ".campaign/$G/cells"` compares every
+cell's `##PROV##` with those commits; its last lines go next to the verdict.
+A change-test plan (`smoke.yaml`'s copies) whose base predates a pin bump
+fails the first check by design: both arms build on the workflow's
+dependencies, so say so in the PR.
 State lives in `.campaign/<generation>/` (git-ignored); a cell's artifact is
 kept 7 days.
 
