@@ -27,7 +27,7 @@ limitations = """
 [settings]
 # GitHub settings as code: swarm-routing/.github tools/repo-settings (swarm-routing/.github#117).
 description = "ARA, the Ant-Colony-Based Routing Algorithm (Güneş, Sorges & Bouazizi, 2002), as a standalone swarm routing protocol for MANETs: planned as a simulator-agnostic C++ core and an ns-3 contrib module on swarm-core, with a paper-fidelity sheet."
-homepage = "https://swarm-routing.github.io/arena/ARA/"
+homepage = "https://swarm-routing.github.io/projects/ARA/"
 topics = ["ara", "ant-colony-optimization", "aco", "swarm-intelligence", "manet", "ad-hoc-routing", "routing-protocol", "ns-3", "network-simulation"]
 ruleset = "protocol"
 required_checks = ["check / org-sync", "title / title", "headers / licence", "core", "ci / ns-latest debug", "ci / ns-latest sanitized", "ci / format", "swarm-core / pin", "review / coderabbit"]
