@@ -23,10 +23,11 @@ ARA, the Ant-Colony-Based Routing Algorithm (Güneş, Sorges & Bouazizi, 2002),
 as a standalone protocol: a simulator-agnostic `core/` and the ns-3 contrib
 module `ara` on
 [`swarm-core`](https://github.com/swarm-routing/ns3-swarm-core). **Status:**
-the org's Phase 3; route discovery, the first slice of `core/`, runs in ns-3
-as the module `ara` (header codec, adapter, helper, example, `test.py -s ara`,
-and the `ara` arm of ns3-tools' `routing-compare`); data reinforcement,
-duplicate errors and route-failure backtracking follow, then the anchor.
+the org's Phase 3; the three slices of `core/` (route discovery, route
+maintenance by data, duplicate errors with route-failure backtracking) run in
+ns-3 as the module `ara` (header codec, adapter, helper, example,
+`test.py -s ara`, and the `ara` arm of ns3-tools' `routing-compare`). What
+remains is the anchor ([#5](https://github.com/swarm-routing/ARA/issues/5)).
 
 **Release status:** the first release, v0.1.0, comes before the comparator gates (maintainer decision 2026-11-10): it has **not** cleared them (org golden rule 6: fidelity sheet, per-PR delivery smoke, anchor). The anchor is pending, so no number from v0.1.0 counts as a benchmark result. The gated release is proposed as v0.2.0. Releases are cut by [`release.yml`](https://github.com/swarm-routing/ARA/blob/main/.github/workflows/release.yml) and listed under [Releases](https://github.com/swarm-routing/ARA/releases).
 

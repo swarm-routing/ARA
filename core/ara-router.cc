@@ -1,8 +1,9 @@
 // Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 //
-// Route discovery ([G02] §3.1), route maintenance by data ([G02] §3.2) and
-// their bookkeeping; see ara-router.h. Each
+// Route discovery ([G02] §3.1), route maintenance by data ([G02] §3.2), loop
+// prevention and route failure ([G02] §3.2, §3.3) and their bookkeeping; see
+// ara-router.h. Each
 // rule names the docs/fidelity.md row it implements.
 #include "ara-router.h"
 

@@ -89,8 +89,8 @@ Ipv4Address RoutingProtocol::SelectNextHop(Ipv4Address dst, Ipv4Address /*src*/,
 void RoutingProtocol::StartDiscovery(Ipv4Address dst) {
     // The core has no route for this packet and holds none (its Drop): the
     // packet the base just deferred is dropped now. A source's discovery was
-    // started by onLocalData; a relay starts none ([G02] §3.3's backtracking
-    // is the core's next slice).
+    // started by onLocalData; a relay starts none (a packet whose link fails
+    // backtracks instead, [G02] §3.3: OnDataUndelivered).
     DiscardDeferred(dst);
 }
 

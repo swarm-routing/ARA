@@ -60,8 +60,9 @@ struct AntMessage {
 
 /// The names of the control kinds, keyed by the wire type byte, so readers of
 /// swarm-core's router observer print "FANT", not "1". An adapter registers it
-/// once with SwarmRoutingBase::SetKindNames. A kind added to AntType (the
-/// duplicate and route errors, [G02] §3.2, §3.3) is added here too.
+/// once with SwarmRoutingBase::SetKindNames. A kind added to AntType is added
+/// here too; the duplicate and route errors ([G02] §3.2, §3.3) are flags on the
+/// data packet, not ant kinds (maintainer decision 2026-11-13 on #5).
 inline constexpr std::array<swarm::core::KindName, 2> kAntKindNames{{
     {static_cast<std::uint8_t>(AntType::Forward), "FANT"},
     {static_cast<std::uint8_t>(AntType::Backward), "BANT"},
