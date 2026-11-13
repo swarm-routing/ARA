@@ -324,13 +324,15 @@ void Router::onDuplicateError(NodeAddress dest, NodeAddress from) {
     dropTrail(dest, from);
 }
 
-FailureDecision Router::onRouteFailure(const DataKey& key, NodeAddress failed) {
+FailureDecision Router::onRouteFailure(const DataKey& key, NodeAddress failed,
+                                       NodeAddress cameFrom) {
     const NodeAddress dest = key.dest;
     age();
     dropTrail(dest, failed);  // fidelity "On a failed link": its ϕ to 0
     // Another link, but not back where the packet came from: unflagged, the
     // previous hop would take it for a loop (DUPLICATE_ERROR) and drop it.
-    const NodeAddress prev = dataHistory_.find(key);
+    NodeAddress prev = dataHistory_.find(key);
+    if (prev == kInvalidAddress && cameFrom != self_) prev = cameFrom;
     if (const NodeAddress hop = bestHopExcept(dest, prev); hop != kInvalidAddress) {
         return {decided({swarm::core::RouteAction::Unicast, hop, std::nullopt}, dest), false};
     }

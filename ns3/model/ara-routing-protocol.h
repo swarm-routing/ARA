@@ -23,9 +23,15 @@
 //    hands to a next hop (OnDataForwarded, at the source and at each relay)
 //    goes to core::Router::onDataSent, and every data packet that arrives
 //    from a neighbour (OnDataReceived, at a relay and at the destination) to
-//    core::Router::onDataReceived. DUPLICATE_ERROR and route-failure
-//    backtracking ([G02] §3.2, §3.3) arrive with the core's next slices;
-//    until then the adapter does not react to a link failure.
+//    core::Router::onDataReceived.
+//  - loop prevention and route failure ([G02] §3.2, §3.3): every arriving
+//    data packet goes to core::Router::admitData; a duplicate goes back to
+//    its sender flagged DUPLICATE_ERROR, whose arrival drops that link
+//    (onDuplicateError). A packet the Wi-Fi MAC gave up on
+//    (OnDataUndelivered) or that came back flagged Backtrack goes to
+//    onRouteFailure, whose answer ResendData carries out: another trail, or
+//    back to the previous hop flagged Backtrack. The flags are a packet tag
+//    (DataFlagTag, ara-header.h).
 //  - ants: the core's Broadcast and Unicast decisions, as one-hop UDP sends.
 //  - the observer: the core reports through SwarmRoutingBase::Observer()
 //    (ControlTx/ControlRx/RouteChanged/DataDecision/StateSize trace sources,
@@ -44,7 +50,8 @@
 
 namespace ara::core {
 class Router;
-}
+struct FailureDecision;
+}  // namespace ara::core
 
 namespace ns3 {
 namespace ara {
@@ -79,12 +86,17 @@ protected:
     void RecvControl(Ptr<Packet> p, Ipv4Address from, Ipv4Address receiver) override;
     bool OnDataReceived(Ptr<const Packet> p, const Ipv4Header& header, Ipv4Address prev) override;
     void OnDataForwarded(Ptr<const Packet> p, const Ipv4Header& header, Ipv4Address next) override;
+    void OnDataUndelivered(Ptr<const Packet> p, const Ipv4Header& header, Ipv4Address failedNext,
+                           Ipv4Address prev) override;
 
 private:
     /// The core's clock port. Clock() is const and the router takes a
     /// mutable reference; SwarmClock is stateless, so this one reads the same.
     SwarmClock m_clock;
     std::unique_ptr<core::Router> m_router;
+    /// Sends a packet as onRouteFailure decided: to another trail, or back to
+    /// the previous hop flagged Backtrack; nothing for a Drop.
+    void CarryOut(const core::FailureDecision& d, Ptr<const Packet> p, const Ipv4Header& header);
     TracedCallback<uint8_t, bool> m_antTx;
 };
 
