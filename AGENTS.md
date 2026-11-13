@@ -27,6 +27,7 @@ docs/       fidelity sheet (paper section -> implementation), parameters with so
 .github/workflows/core.yml   core/ alone: strict warnings, tests, ASan + UBSan, clang-format (check `core`)
 .github/workflows/swarm-core-pin.yml   the swarm-core pin is one SHA and current (check `swarm-core / pin`)
 .github/workflows/benchmark-cell.yml   one benchmark cell at a pinned source_sha (reusable-benchmark-cell.yml, build mode); dispatched by ns3-campaign
+tools/bench/check_plan_deps.py   a plan's source_sha and named dependency commits against benchmark-cell.yml's, before a dispatch and on collected cells (#105; --self-test)
 tools/bench/campaigns/   campaign plans: smoke.yaml (the change-test smoke against the base), anchor.yaml (the paper's trend, ARA vs AODV)
 ```
 
@@ -109,6 +110,20 @@ The dependency commits come from `benchmark-cell.yml` at the dispatch ref
 image: do not merge a change to that file's `dependencies` while a campaign
 is in flight, and the `grep` above (one swarm-core and one routing-bench
 commit across every cell) is the check that none did.
+Before a dispatch, the plan and that file must already agree (#105):
+`python3 -I tools/bench/check_plan_deps.py P.yaml` reads `benchmark-cell.yml`
+at the plan's dispatch ref and fails unless `core/CMakeLists.txt` at every
+`source_sha` pins the swarm-core commit the cells would build
+(`SWARM_CORE_REF`), and the plan names each dependency as `<name>@<commit>`
+(swarm-core and routing-bench) with the commits the workflow builds. Run it
+when a plan is pre-registered and again right before `dispatch`; if a pin bump
+merged in between, the plan is stale: pre-register a new one (new
+`generation`, a `source_sha` at or after the bump), never edit the old. After
+`collect`, the same command with `--cells ".campaign/$G/cells"` compares every
+cell's `##PROV##` with those commits; its last lines go next to the verdict.
+A change-test plan (`smoke.yaml`'s copies) whose base predates a pin bump
+fails the first check by design: both arms build on the workflow's
+dependencies, so say so in the PR.
 State lives in `.campaign/<generation>/` (git-ignored); a cell's artifact is
 kept 7 days.
 
