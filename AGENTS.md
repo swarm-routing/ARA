@@ -38,6 +38,7 @@ results/cells/<generation>/   the raw cells of each pre-registered run, as `ns3-
 .github/workflows/swarm-core-pin.yml   the swarm-core pin is one SHA and current (check `swarm-core / pin`)
 .github/workflows/benchmark-cell.yml   one benchmark cell at a pinned source_sha (reusable-benchmark-cell.yml, build mode); dispatched by ns3-campaign
 tools/bench/check_plan_deps.py   a plan's source_sha and named dependency commits against benchmark-cell.yml's, before a dispatch and on collected cells (#105; --self-test)
+tools/bench/anchor_extra.py      an anchor's reported, not gated, metrics (routing packets, nrl_bytes), paired by seed with ns3-tools' stats_util (--self-test)
 tools/bench/campaigns/   campaign plans: smoke.yaml (the change-test smoke against the base), anchor-3.yaml (the paper's trend, ARA vs AODV; dispatched 2026-11-13, misses), anchor.yaml (its first pre-registration: dispatched 2026-11-13 and read on #5, its cells built on swarm-core 360ceef and 501dd7e, not the 0919dbf it names; superseded, kept as the record, #105),
                          buffer-ab.yaml (BufferDuringDiscovery off vs on, #5), anchor-buffer.yaml (anchor-3 with the switch on, at 83a1020, #5)
 ```
