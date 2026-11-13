@@ -67,7 +67,9 @@ struct FailureDecision {
 class Router {
 public:
     /// Receives every ant this node sends: a Broadcast (FANT) or a Unicast to
-    /// a neighbour (BANT), each with its message set.
+    /// a neighbour (BANT), each with its message set; and, with
+    /// bufferDuringDiscovery, a DiscardPending (no message) for a destination
+    /// whose discovery ended with no trail.
     using Sink = std::function<void(const AntDecision&)>;
 
     /// The ports must outlive the router, and the timers it schedules must
@@ -79,9 +81,10 @@ public:
     Router& operator=(const Router&) = delete;
 
     /// This node has a data packet for `dest`. Unicast to the next hop when a
-    /// trail exists. Otherwise Drop (no buffering, fidelity "Data packets
-    /// waiting for a route"), and either a discovery starts or, while one
-    /// runs, the packet counts as demand for its next retry (#5).
+    /// trail exists. Otherwise either a discovery starts or, while one runs,
+    /// the packet counts as demand for its next retry (#5); and the packet is
+    /// dropped (no buffering, fidelity "Data packets waiting for a route"),
+    /// or, with bufferDuringDiscovery and a discovery running, held: Queue.
     AntDecision onLocalData(NodeAddress dest);
 
     /// A data packet for `dest` that arrived from a neighbour and is not this
@@ -142,6 +145,12 @@ public:
 
     /// True while a discovery for `dest` is waiting for its BANT.
     bool discovering(NodeAddress dest) const { return discoveries_.contains(dest); }
+
+    /// True when data for `dest` with no trail is held, not dropped: with
+    /// bufferDuringDiscovery, while this node's discovery for `dest` runs.
+    bool holds(NodeAddress dest) const {
+        return config_.bufferDuringDiscovery && discovering(dest);
+    }
 
     NodeAddress self() const { return self_; }
 

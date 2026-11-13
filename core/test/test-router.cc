@@ -162,6 +162,59 @@ void TestRetryOnlyWithDemand(Checker& c) {
     }
 }
 
+void TestBufferHoldsDuringDiscovery(Checker& c) {
+    Config on;
+    on.bufferDuringDiscovery = true;
+    Harness s(1, on);
+    const auto first = s.router.onLocalData(9);
+    c.check(first.action == RouteAction::Queue && first.nextHop == 9 && s.router.discovering(9),
+            "no route, buffering on: held for the destination, and a discovery starts");
+    c.check(s.router.holds(9) && !s.router.holds(5), "held only while its discovery runs");
+    c.check(s.router.onLocalData(9).action == RouteAction::Queue && s.out.size() == 1,
+            "the next packet is held too, no second FANT");
+    s.router.onAnt(bant(9, 1, 1, 2), 2);
+    c.check(!s.router.holds(9) && s.router.nextHop(9) == 2,
+            "the BANT ends the discovery and lays the trail the held data takes");
+    const auto data = s.router.onLocalData(9);
+    c.check(data.action == RouteAction::Unicast && data.nextHop == 2, "then data goes out");
+
+    Harness off(1);
+    c.check(off.router.onLocalData(9).action == RouteAction::Drop && !off.router.holds(9),
+            "off (the default): dropped, nothing held");
+    off.events.advance(2.81);
+    c.check(off.out.size() == 1, "off: a discovery that gives up sends nothing more");
+}
+
+void TestBufferGivesUpWithTheDiscovery(Checker& c) {
+    Config on;
+    on.bufferDuringDiscovery = true;
+    Harness s(1, on);
+    s.router.onLocalData(9);
+    s.events.advance(2.81);  // no BANT, no data since the FANT: the discovery ends
+    c.check(!s.router.holds(9) && s.out.size() == 2, "a FANT, then one more decision");
+    if (s.out.size() == 2) {
+        const auto& d = s.out[1].decision;
+        c.check(d.action == RouteAction::DiscardPending && d.nextHop == 9 && !d.message,
+                "ended with no trail: the held data goes (DiscardPending)");
+    }
+
+    Harness t(1, on);
+    t.router.onLocalData(9);
+    t.router.onAnt(fant(9, 4, 1, 0), 3);  // 9's own FANT lays a trail toward 9
+    t.events.advance(2.81);
+    bool discarded = false;
+    for (const auto& sent : t.out)
+        discarded = discarded || sent.decision.action == RouteAction::DiscardPending;
+    c.check(!t.router.holds(9) && t.router.nextHop(9) == 3 && !discarded,
+            "ended with a trail: nothing discarded");
+
+    Config full = on;
+    full.maxDiscoveries = 0;
+    Harness u(1, full);
+    c.check(u.router.onLocalData(9).action == RouteAction::Drop && !u.router.holds(9),
+            "no discovery can start (cap): dropped, not held");
+}
+
 void TestRetryLimitAndDoubling(Checker& c) {
     Harness h(1);
     h.router.onLocalData(9);  // t = 0

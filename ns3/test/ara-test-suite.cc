@@ -24,6 +24,7 @@
 
 #include "ns3/ara-helper.h"
 #include "ns3/ara-routing-protocol.h"
+#include "ns3/boolean.h"
 #include "ns3/inet-socket-address.h"
 #include "ns3/internet-stack-helper.h"
 #include "ns3/ipv4-address-helper.h"
@@ -257,14 +258,19 @@ struct ChainRun {
 class Chain {
 public:
     /// `observe` connects the router observer's trace sources, which must not
-    /// change the run (org rule 5).
-    ChainRun Run(uint32_t seed, uint32_t packets, bool observe = false, double moveAt = 0.0) {
+    /// change the run (org rule 5). `buffer` sets BufferDuringDiscovery;
+    /// `extra` runs that much longer after the last packet.
+    ChainRun Run(uint32_t seed, uint32_t packets, bool observe = false, double moveAt = 0.0,
+                 bool buffer = false, double extra = 0.0) {
         SwarmCoreSeed(seed);
         NodeContainer nodes;
         nodes.Create(4);
         NetDeviceContainer devs = LineOfWifiNodes(nodes);
 
         AraHelper ara;
+        if (buffer) {
+            ara.Set("BufferDuringDiscovery", BooleanValue(true));
+        }
         ara.Install(nodes);
         Ipv4AddressHelper a;
         a.SetBase("10.1.0.0", "255.255.255.0");
@@ -305,7 +311,7 @@ public:
                 dst->GetObject<MobilityModel>()->SetPosition(Vector(5000.0, 0.0, 0.0));
             });
         }
-        Simulator::Stop(Seconds(2.0 + 0.5 * packets));
+        Simulator::Stop(Seconds(2.0 + 0.5 * packets + extra));
         Simulator::Run();
         m_run.nextHop0 = Proto(nodes.Get(0))->NextHop(m_dst);
         m_run.nextHop1 = Proto(nodes.Get(1))->NextHop(m_dst);
@@ -403,6 +409,33 @@ private:
         NS_TEST_EXPECT_MSG_EQ(r.queue0.enqueued, 1u, "only the first packet found no trail");
         NS_TEST_EXPECT_MSG_EQ(r.nextHop0, r.expect0, "node 0 still routes over node 1");
         NS_TEST_EXPECT_MSG_EQ(r.nextHop1, r.expect1, "node 1 still routes over node 2");
+    }
+};
+
+/// The BufferDuringDiscovery switch (#5): the packet that starts the
+/// discovery is held and sent when the BANT lays the trail; with no answer,
+/// the held packets go when the discovery ends. Off, ChainDeliveryTestCase.
+class BufferTestCase : public TestCase {
+public:
+    BufferTestCase()
+        : TestCase("adapter: BufferDuringDiscovery holds data while the discovery runs (#5)") {}
+
+private:
+    void DoRun() override {
+        const ChainRun r = Chain().Run(1, 20, false, 0.0, true);
+        NS_TEST_EXPECT_MSG_EQ(r.received, 20u, "every packet delivered, the first one too");
+        NS_TEST_EXPECT_MSG_EQ(r.queue0.enqueued, 1u, "the first packet found no trail");
+        NS_TEST_EXPECT_MSG_EQ(r.queue0.released, 1u, "held, then sent when the BANT came back");
+        NS_TEST_EXPECT_MSG_EQ(r.queue0.discarded, 0u, "nothing dropped");
+        NS_TEST_EXPECT_MSG_EQ(r.nextHop0, r.expect0, "node 0 routes to node 3 over node 1");
+
+        // The destination is gone before the first packet: no BANT. One
+        // packet, so no retry: the discovery ends at 1 + 2.8 s with no trail.
+        const ChainRun g = Chain().Run(1, 1, false, 0.5, true, 5.0);
+        NS_TEST_EXPECT_MSG_EQ(g.received, 0u, "nothing to deliver to");
+        NS_TEST_EXPECT_MSG_EQ(g.queue0.enqueued, 1u, "held while the discovery ran");
+        NS_TEST_EXPECT_MSG_EQ(g.queue0.discarded, 1u, "dropped when it ended with no trail");
+        NS_TEST_EXPECT_MSG_EQ(g.queue0.released, 0u, "never sent");
     }
 };
 
@@ -599,6 +632,7 @@ public:
         AddTestCase(new ChainDeliveryTestCase, TestCase::Duration::QUICK);
         AddTestCase(new MaintenanceTestCase, TestCase::Duration::QUICK);
         AddTestCase(new BacktrackTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new BufferTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DeterminismTestCase, TestCase::Duration::QUICK);
         AddTestCase(new ObserverTestCase, TestCase::Duration::QUICK);
         AddTestCase(new AdapterGuardsTestCase, TestCase::Duration::QUICK);

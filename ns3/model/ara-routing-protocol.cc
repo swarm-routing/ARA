@@ -6,6 +6,7 @@
 #include "ara-router.h"
 
 #include "ns3/abort.h"
+#include "ns3/boolean.h"
 #include "ns3/log.h"
 
 namespace ns3 {
@@ -18,13 +19,20 @@ TypeId RoutingProtocol::GetTypeId() {
     // Registered with the TypeId, once, so every way of installing the
     // protocol gets the names (FANT, BANT) in its observer's readers.
     static TypeId tid = [] {
-        TypeId t = TypeId("ns3::ara::RoutingProtocol")
-                       .SetParent<SwarmRoutingBase>()
-                       .SetGroupName("Ara")
-                       .AddConstructor<RoutingProtocol>()
-                       .AddTraceSource("AntTx", "An ant this node sent (type byte, broadcast).",
-                                       MakeTraceSourceAccessor(&RoutingProtocol::m_antTx),
-                                       "ns3::ara::RoutingProtocol::AntTxCallback");
+        TypeId t =
+            TypeId("ns3::ara::RoutingProtocol")
+                .SetParent<SwarmRoutingBase>()
+                .SetGroupName("Ara")
+                .AddConstructor<RoutingProtocol>()
+                .AddAttribute("BufferDuringDiscovery",
+                              "Hold data with no trail while this node's discovery for its "
+                              "destination runs (core Config bufferDuringDiscovery; off: "
+                              "dropped, as [G02]).",
+                              BooleanValue(false), MakeBooleanAccessor(&RoutingProtocol::m_buffer),
+                              MakeBooleanChecker())
+                .AddTraceSource("AntTx", "An ant this node sent (type byte, broadcast).",
+                                MakeTraceSourceAccessor(&RoutingProtocol::m_antTx),
+                                "ns3::ara::RoutingProtocol::AntTxCallback");
         SwarmRoutingBase::SetKindNames(t, core::kAntKindNames);
         return t;
     }();
@@ -38,15 +46,21 @@ RoutingProtocol::~RoutingProtocol() = default;
 void RoutingProtocol::DoInitialize() {
     // The interfaces are up by now (addresses are assigned before the
     // simulation starts), so the node's address is known. The protocol
-    // constants are core::Config's defaults, each sourced in docs/fidelity.md.
+    // constants are core::Config's defaults, each sourced in docs/fidelity.md,
+    // and the one switch this adapter exposes (BufferDuringDiscovery).
     const swarm::core::NodeAddress self = ToNodeAddress(MainAddress());
+    core::Config config;
+    config.bufferDuringDiscovery = m_buffer;
     m_router = std::make_unique<core::Router>(
-        self, core::Config{}, m_clock, Rng(), Timers(), [this](const core::AntDecision& d) {
-            NS_ASSERT_MSG(d.message, "the ARA core sends ants only");
-            m_antTx(static_cast<uint8_t>(d.message->type),
-                    d.action == swarm::core::RouteAction::Broadcast);
+        self, config, m_clock, Rng(), Timers(), [this](const core::AntDecision& d) {
+            if (d.message) {
+                m_antTx(static_cast<uint8_t>(d.message->type),
+                        d.action == swarm::core::RouteAction::Broadcast);
+            }
             const bool done = Execute(d, MakeAntPacket);
-            NS_ASSERT_MSG(done, "the ARA core sends ants only by Broadcast or Unicast");
+            NS_ASSERT_MSG(done &&
+                              (d.message || d.action == swarm::core::RouteAction::DiscardPending),
+                          "the ARA core sends ants (Broadcast, Unicast) and DiscardPending only");
             (void)done;
         });
     m_router->setObserver(&Observer());
@@ -91,7 +105,27 @@ void RoutingProtocol::StartDiscovery(Ipv4Address dst) {
     // packet the base just deferred is dropped now. A source's discovery was
     // started by onLocalData; a relay starts none (a packet whose link fails
     // backtracks instead, [G02] §3.3: OnDataUndelivered).
+    if (m_router && m_buffer) {
+        // Buffering (#5): held while this node's discovery for dst runs. The
+        // loopback hop between RouteOutput and here is an event of its own,
+        // so a trail may have arrived in between: send the packet then.
+        const swarm::core::NodeAddress dest = ToNodeAddress(dst);
+        if (m_router->nextHop(dest) != swarm::core::kInvalidAddress) {
+            ReleaseDeferred(dst);
+            return;
+        }
+        if (m_router->holds(dest)) {
+            return;
+        }
+    }
     DiscardDeferred(dst);
+}
+
+void RoutingProtocol::ReleaseIfRouted(Ipv4Address dst) {
+    if (m_buffer && m_router && GetDeferredQueue()->Has(dst) &&
+        m_router->nextHop(ToNodeAddress(dst)) != swarm::core::kInvalidAddress) {
+        ReleaseDeferred(dst);
+    }
 }
 
 namespace {
@@ -140,6 +174,7 @@ bool RoutingProtocol::OnDataReceived(Ptr<const Packet> p, const Ipv4Header& head
     }
     // [G02] §3.2: the next hop strengthens the trail toward the source.
     m_router->onDataReceived(ToNodeAddress(header.GetSource()), ToNodeAddress(prev));
+    ReleaseIfRouted(header.GetSource());  // a trail data laid (buffering, #5)
     // At the destination the base hands the packet up (no SelectNextHop):
     // the core reports that decision (Deliver) here. A relay's decision is
     // reported by SelectNextHop next.
@@ -194,6 +229,9 @@ void RoutingProtocol::RecvControl(Ptr<Packet> p, Ipv4Address from, Ipv4Address /
         return;
     }
     m_router->onAnt(*ant, ToNodeAddress(from));
+    // A FANT lays a trail toward its source, a BANT toward its source (the
+    // destination of the discovery): data held for it can go (buffering, #5).
+    ReleaseIfRouted(ToIpv4Address(ant->source));
 }
 
 }  // namespace ara
