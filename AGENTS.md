@@ -35,7 +35,8 @@ docs/       fidelity sheet (paper section -> implementation), parameters with so
 .github/workflows/swarm-core-pin.yml   the swarm-core pin is one SHA and current (check `swarm-core / pin`)
 .github/workflows/benchmark-cell.yml   one benchmark cell at a pinned source_sha (reusable-benchmark-cell.yml, build mode); dispatched by ns3-campaign
 tools/bench/check_plan_deps.py   a plan's source_sha and named dependency commits against benchmark-cell.yml's, before a dispatch and on collected cells (#105; --self-test)
-tools/bench/campaigns/   campaign plans: smoke.yaml (the change-test smoke against the base), anchor-3.yaml (the paper's trend, ARA vs AODV; the plan to dispatch), anchor.yaml (its first pre-registration, superseded and never dispatched, kept as the record)
+tools/bench/campaigns/   campaign plans: smoke.yaml (the change-test smoke against the base), anchor-3.yaml (the paper's trend, ARA vs AODV; the plan to dispatch), anchor.yaml (its first pre-registration: dispatched 2026-11-13 and read on #5, its cells built on swarm-core 360ceef and 501dd7e, not the 0919dbf it names; superseded, kept as the record, #105),
+                         buffer-ab.yaml (BufferDuringDiscovery off vs on, #5), anchor-buffer.yaml (anchor-3 with the switch on, at 83a1020, #5)
 ```
 
 ## Build & verify
@@ -150,10 +151,14 @@ swarm-core 6966421 and routing-bench 3d279b8 (maintainer decision 2026-11-13:
 "Bump, then anchor-3", #105). Its one arm pairs protocols, not commits:
 `reference: aodv` makes `ns3-campaign verdicts` print ARA minus AODV, paired
 by seed, for every cell (swarm-routing/ns3-tools#152). It supersedes
-`anchor.yaml` (`source_sha` c7d6acb, #101; never dispatched, kept unchanged
-as the record: it names swarm-core 0919dbf, which its cells would not have
-built, and `check_plan_deps.py` fails on it), whose trend, cells, seeds and
-pass rule it copies. A plan `anchor-2` at swarm-core 501dd7e was drafted in
+`anchor.yaml` (`source_sha` c7d6acb, #101; kept unchanged as the record: it
+names swarm-core 0919dbf, but its cells, dispatched on 2026-11-13, built on
+360ceef (p0, p30) and 501dd7e (p120, p600), as their `##PROV##` lines show,
+and `check_plan_deps.py` fails on it; its read is on #5, superseded, #105),
+whose trend, cells, seeds and pass rule it copies. `anchor-buffer.yaml` is
+anchor-3 with BufferDuringDiscovery on, at 83a1020 (71d2166 plus #112, whose
+default path is byte-identical), and `buffer-ab.yaml` the switch's own A/B
+(#5, option 2). A plan `anchor-2` at swarm-core 501dd7e was drafted in
 #113 and dropped before it reached `main`.
 
 ## Golden rules (invariants — do not break)

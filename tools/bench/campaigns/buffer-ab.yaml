@@ -1,0 +1,56 @@
+# Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
+# SPDX-License-Identifier: MIT OR GPL-2.0-only
+#
+# The A/B of the BufferDuringDiscovery switch (#5, option 2: maintainer
+# decision 2026-11-13, https://github.com/swarm-routing/ARA/issues/5#issuecomment-6844076630).
+# One commit, 83a1020 (#112 merged), two arms: the switch off (the
+# default, [G02]'s no buffering) and on; identical seeds (1-20) in the two
+# families of smoke.yaml (the paper grid under random waypoint at pause 30 s,
+# and the near-static mesh at pause 300 s), ara alone in the harness, on
+# ns3-dev 3.48-optimized (fb7596b) by digest, the anchor's image.
+#
+# Pre-registered here before any dispatch. What it measures: on minus off,
+# paired by seed (`verdicts`: bench_parse --ab --proto ara), PDR, delay,
+# delay99 and NRL with their 95 % CIs, per family. No pass rule: it is the
+# switch's own A/B (the fidelity sheet's "a default-off switch with its own
+# A/B"); the anchor's rule is anchor-buffer.yaml's. Expected, not gated: PDR
+# up where discoveries are frequent (grid-rwp), delay up (held packets wait),
+# little change on the near-static mesh.
+#
+# Dependencies, as .github/workflows/benchmark-cell.yml builds them at main on
+# 2026-11-13 (check_plan_deps.py, #105): swarm-core@69664219b2edc63995614332cf9f651b1720622b
+# routing-bench@3d279b83392a00288050574cee4288f30205658b; 83a1020 pins the same
+# swarm-core (SWARM_CORE_REF).
+#
+#   P=tools/bench/campaigns/buffer-ab.yaml
+#   C="python3 ../ns3-tools/python/ns3_tool/campaign.py"   # or `ns3-campaign`
+#   $C plan $P                                      # 4 jobs; dispatches nothing
+#   python3 -I tools/bench/check_plan_deps.py $P   # again right before dispatch: plan deps: ok
+#   $C dispatch $P --cap 4
+#   $C status $P --brief
+#   $C collect $P --out .campaign/buffer-ab/cells   # rejects a cell on another dependency set (ns3-tools#148)
+#   python3 -I tools/bench/check_plan_deps.py $P --cells .campaign/buffer-ab/cells   # every ##PROV## names the plan's commits
+#   $C verdicts $P --dir .campaign/buffer-ab/cells  # on - off per family
+generation: buffer-ab
+ref: main
+repo: swarm-routing/ARA
+source_sha: 83a10206eb1c76b288caa884daf0955401383035
+workflow: benchmark-cell.yml
+program: routing-compare
+image: ghcr.io/swarm-routing/ns3-dev@sha256:5585a93c5cea1980592539e2d26a4e111e0ff4b0cc63b3dfd6ea5de459d80d3f
+cap: 4
+control: "off"
+# The arms differ only in their attributes (the switch): same commit, image and
+# seeds; `plan` and `dispatch` refuse the plan if anything else differs (#89).
+isolates: args
+
+arms:
+  "off": ""
+  "on": "--ns3::ara::RoutingProtocol::BufferDuringDiscovery=true"
+
+cells:
+  grid-rwp: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: "--scenario=paper --nNodes=50 --time=300 --areaX=1500 --areaY=300 --speed=20 --pause=30 --range=300 --propagation=range --mobility=rwp --transport=udp --diag --firstRun=1 --runs=20 --protocols=ara"}}
+  static-mesh: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: "--scenario=paper --nNodes=50 --time=300 --areaX=1500 --areaY=300 --speed=20 --pause=300 --range=300 --propagation=range --mobility=rwp --transport=udp --diag --firstRun=1 --runs=20 --protocols=ara"}}
+
+jobs:
+  - {arms: ["off", "on"], cells: "*"}

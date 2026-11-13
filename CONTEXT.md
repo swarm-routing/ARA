@@ -25,9 +25,10 @@ work stands.
   commit that merges #113, the swarm-core pin bump to 6966421 after
   swarm-routing/ns3-swarm-core#104), swarm-core 6966421 and routing-bench
   3d279b8 (maintainer decision 2026-11-13, #105). It supersedes
-  `anchor.yaml` (`source_sha` c7d6acb, #101), never dispatched because it
-  names swarm-core 0919dbf, which its cells would not have built; it is kept
-  unchanged as the record. `tools/bench/check_plan_deps.py` must pass on
+  `anchor.yaml` (`source_sha` c7d6acb, #101), dispatched on 2026-11-13 and
+  read on #5 (PDR gates missed, NRL passed), whose cells built on swarm-core
+  360ceef and 501dd7e, not the 0919dbf it names (#105); it is kept unchanged
+  as the record. `tools/bench/check_plan_deps.py` must pass on
   `anchor-3.yaml` again right before the dispatch.
 - **Gates.** Fidelity sheet: written (`docs/fidelity.md`). Per-PR delivery
   smoke: in `.github/workflows/ns3.yml`. Anchor: pending, so no number from

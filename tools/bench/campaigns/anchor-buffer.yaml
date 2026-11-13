@@ -1,0 +1,95 @@
+# Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
+# SPDX-License-Identifier: MIT OR GPL-2.0-only
+#
+# ARA's anchor (#36; the third gate of org rule 6): the paper's own trend,
+# from docs/fidelity.md "Anchor candidate" (Güneş, Sorges & Bouazizi 2002,
+# https://doi.org/10.1109/icppw.2002.1039715, §4, Figs. 4, 6, 8), as decided
+# on #4 (2026-11-09 and 2026-11-10): v2.5.0's scenario and pass rule, run
+# again on the new core/ with >= 20 paired seeds.
+#
+#   Trend: at high mobility (pause 0 and 30 s) ARA delivers more than AODV
+#   and has the lower routing overhead; at low mobility they are close.
+#   Rule (pre-registered, v2.5.0's): paired by seed, ARA minus AODV; PDR with
+#   its 95 % CI above zero at pause 0 and at pause 30; NRL with its 95 % CI
+#   below zero at pause 0. The 120 s and 600 s cells are reported, not gated,
+#   as are the raw routing-packet counts and nrl_bytes (Fig. 8 plots counts,
+#   Fig. 6 bits per data bit; docs/fidelity.md).
+#
+# Scenario ([G02] §4.1-4.2, the rest repo choices recorded in the sheet):
+# 50 nodes, 1500 m x 300 m, 802.11 at 2 Mbit/s, 300 m disk range, random
+# waypoint 1-10 m/s, 900 s, 10 CBR flows of 64 B at 1 packet/s
+# (`--scenario=paper`, v2.5.0's command lines with --runs/--firstRun for the
+# seeds), pauses 0, 30, 120 and 600 s (four of the paper's seven, as v2.5.0).
+# ARA and stock ns-3 AODV run in the same invocation, so every seed pairs them
+# on the same mobility and traffic.
+#
+# This is the second run (#5, option 2: maintainer decision 2026-11-13,
+# https://github.com/swarm-routing/ARA/issues/5#issuecomment-6844076630). The
+# first, anchor.yaml at c7d6acb, dispatched on 2026-11-13, missed the PDR gates
+# and passed the NRL gate (the read on #5); its cells' ##PROV## lines name
+# swarm-core 360ceef (p0, p30) and 501dd7e (p120, p600), not the 0919dbf the
+# plan names, so that read is confounded and superseded (#105), and its record
+# stays. This run changes one thing: ARA holds data while its
+# discovery runs (BufferDuringDiscovery, default off, #112), set on the `ara`
+# arm below; AODV is unaffected by the attribute. Scenario, seeds (RngRun
+# 1-20 per cell), image, cells and pass rule are anchor.yaml's, unchanged.
+# Pre-registered on 2026-11-13: the commit under test is 83a1020 (#112
+# merged), committed here before any dispatch. If it passes, whether the
+# default changes goes back to the maintainer with the A/B (buffer-ab.yaml);
+# if it misses, buffering alone does not explain the first miss.
+# Its switch-off pair is anchor-3.yaml (#114: the default anchor at 71d2166,
+# the same cells, seeds, image and dependencies; 83a1020 is 71d2166 plus #112,
+# whose default path is byte-identical), so the two read ARA without and with
+# the switch against the same AODV runs, seed by seed.
+#
+# One arm: the comparison is between two protocols in one cell, not between
+# two commits. `reference: aodv` (swarm-routing/ns3-tools#152) makes
+# `ns3-campaign verdicts` print ARA minus AODV, paired by seed, for every cell:
+# the read the rule above takes. It is a read key: it changes no job.
+#
+# Dependencies, as .github/workflows/benchmark-cell.yml builds them at main on
+# 2026-11-13 (check_plan_deps.py, #105): swarm-core@69664219b2edc63995614332cf9f651b1720622b
+# routing-bench@3d279b83392a00288050574cee4288f30205658b; 83a1020 pins the same
+# swarm-core (SWARM_CORE_REF).
+#
+#   P=tools/bench/campaigns/anchor-buffer.yaml
+#   C="python3 ../ns3-tools/python/ns3_tool/campaign.py"   # or `ns3-campaign`
+#   $C plan $P                                      # 8 jobs; dispatches nothing
+#   python3 -I tools/bench/check_plan_deps.py $P   # again right before dispatch: plan deps: ok
+#   $C dispatch $P --cap 4
+#   $C status $P --brief
+#   $C collect $P --out .campaign/anchor-buffer/cells   # one dependency set in every cell (ns3-tools#148)
+#   python3 -I tools/bench/check_plan_deps.py $P --cells .campaign/anchor-buffer/cells   # every ##PROV## names the plan's commits
+#   $C verdicts $P --dir .campaign/anchor-buffer/cells     # ara - aodv per cell: dPDR, d_d99, d_NRL paired 95% CIs
+generation: anchor-buffer
+ref: main
+repo: swarm-routing/ARA
+source_sha: 83a10206eb1c76b288caa884daf0955401383035
+workflow: benchmark-cell.yml
+program: routing-compare
+# ns3-dev:3.48-optimized on 2026-11-13: AODV-family arms stay on 3.48 while
+# ns-3.49's AODV livelocks (swarm-routing/ns3-containers#35; docs/fidelity.md).
+image: ghcr.io/swarm-routing/ns3-dev@sha256:5585a93c5cea1980592539e2d26a4e111e0ff4b0cc63b3dfd6ea5de459d80d3f
+# 8 jobs of 10 seeds; at most 4 cell runs at once, so PR CI keeps runners.
+cap: 4
+control: ara
+# The baseline every other protocol of a cell is paired against in `verdicts`.
+reference: aodv
+
+arms:
+  ara: "--ns3::ara::RoutingProtocol::BufferDuringDiscovery=true"
+
+# 20 seeds per cell (RngRun 1..20) in two jobs of 10 (blocks: --firstRun=1
+# and --firstRun=11), as v2.5.0 split its 900 s cells.
+x-field: &field "--scenario=paper --nNodes=50 --time=900 --areaX=1500 --areaY=300 --speed=10 --flows=10 --runs=10 --diag --protocols=ara,aodv"
+cells:
+  # gated: PDR (ARA - AODV) CI > 0; NRL (ARA - AODV) CI < 0
+  anchor-p0: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: *field, extraArgs: "--pause=0"}, blocks: [1, 11]}
+  # gated: PDR (ARA - AODV) CI > 0
+  anchor-p30: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: *field, extraArgs: "--pause=30"}, blocks: [1, 11]}
+  # reported, not gated
+  anchor-p120: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: *field, extraArgs: "--pause=120"}, blocks: [1, 11]}
+  anchor-p600: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: *field, extraArgs: "--pause=600"}, blocks: [1, 11]}
+
+jobs:
+  - {arms: [ara], cells: "*"}
