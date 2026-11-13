@@ -7,7 +7,7 @@ before changing anything. Org-wide conventions:
 
 ## What this repo is
 
-**Status: `core/` and `ns3/` in progress (Phase 3, #5).** The core's first slice, route discovery (FANT/BANT, trails, evaporation, next hop, discovery retries, the ant wire header), builds and tests on its own and inside ns-3 as the contrib module `ara`, whose adapter carries it out on swarm-core's `SwarmRoutingBase`; data reinforcement, the router observer, and duplicate errors with route-failure backtracking ([G02] §3.2–3.3) are in, and the adapter carries the last out on swarm-core's `OnDataUndelivered`/`ResendData` (#96, #98). What remains of #5 is the anchor verdict: no plan is cleared for dispatch; `anchor.yaml` is superseded, and the anchor is pre-registered anew after the swarm-core pin bump to 6966421 (maintainer decision 2026-11-13, #105).
+**Status: `core/` and `ns3/` in progress (Phase 3, #5).** The core's first slice, route discovery (FANT/BANT, trails, evaporation, next hop, discovery retries, the ant wire header), builds and tests on its own and inside ns-3 as the contrib module `ara`, whose adapter carries it out on swarm-core's `SwarmRoutingBase`; data reinforcement, the router observer, and duplicate errors with route-failure backtracking ([G02] §3.2–3.3) are in, and the adapter carries the last out on swarm-core's `OnDataUndelivered`/`ResendData` (#96, #98). What remains of #5 is the anchor verdict (`anchor-3.yaml`, pre-registered at the swarm-core pin 6966421 and not yet dispatched; it supersedes `anchor.yaml`, #105).
 
 ARA, the Ant-Colony-Based Routing Algorithm (Güneş, Sorges & Bouazizi, 2002),
 as a standalone hexagonal protocol: a simulator-agnostic `core/` and an ns-3
@@ -35,7 +35,7 @@ docs/       fidelity sheet (paper section -> implementation), parameters with so
 .github/workflows/swarm-core-pin.yml   the swarm-core pin is one SHA and current (check `swarm-core / pin`)
 .github/workflows/benchmark-cell.yml   one benchmark cell at a pinned source_sha (reusable-benchmark-cell.yml, build mode); dispatched by ns3-campaign
 tools/bench/check_plan_deps.py   a plan's source_sha and named dependency commits against benchmark-cell.yml's, before a dispatch and on collected cells (#105; --self-test)
-tools/bench/campaigns/   campaign plans: smoke.yaml (the change-test smoke against the base), anchor.yaml (the paper's trend, ARA vs AODV: the first pre-registration, superseded and never dispatched, kept as the record; the plan to dispatch is pre-registered anew, #105)
+tools/bench/campaigns/   campaign plans: smoke.yaml (the change-test smoke against the base), anchor-3.yaml (the paper's trend, ARA vs AODV; the plan to dispatch), anchor.yaml (its first pre-registration, superseded and never dispatched, kept as the record)
 ```
 
 ## Build & verify
@@ -138,25 +138,23 @@ dependencies, so say so in the PR.
 State lives in `.campaign/<generation>/` (git-ignored); a cell's artifact is
 kept 7 days.
 
-`anchor.yaml` is the anchor's first pre-registration (the third gate of org
-rule 6): the trend and pass
-rule of `docs/fidelity.md` "Anchor candidate" (ARA minus AODV, paired by seed;
-PDR CI above zero at pause 0 and 30 s, NRL CI below zero at pause 0; 120 and
-600 s reported), ARA and AODV in one `routing-compare` invocation per seed, 20
-seeds per cell in two blocks of 10, on ns3-dev 3.48-optimized by digest
-(ns-3.49's AODV livelocks, swarm-routing/ns3-containers#35), pre-registered
-at `source_sha` c7d6acb (#101). Its one arm pairs protocols, not commits:
+`anchor-3.yaml` is the anchor (the third gate of org rule 6): the trend and
+pass rule of `docs/fidelity.md` "Anchor candidate" (ARA minus AODV, paired by
+seed; PDR CI above zero at pause 0 and 30 s, NRL CI below zero at pause 0; 120
+and 600 s reported), ARA and AODV in one `routing-compare` invocation per
+seed, 20 seeds per cell in two blocks of 10, on ns3-dev 3.48-optimized by
+digest (ns-3.49's AODV livelocks, swarm-routing/ns3-containers#35),
+pre-registered at `source_sha` 71d2166 (the commit that merges #113, the
+swarm-core pin bump to 6966421, so with the 30 s history lifetime of #111),
+swarm-core 6966421 and routing-bench 3d279b8 (maintainer decision 2026-11-13:
+"Bump, then anchor-3", #105). Its one arm pairs protocols, not commits:
 `reference: aodv` makes `ns3-campaign verdicts` print ARA minus AODV, paired
-by seed, for every cell (swarm-routing/ns3-tools#152). It is superseded and
-was never dispatched: it names swarm-core 0919dbf, which the cells would not
-have built (#105), and `check_plan_deps.py` fails on it. It stays unchanged as
-the record. No plan is cleared for dispatch today. The anchor is
-pre-registered anew, as a new plan with a new `generation` that copies
-`anchor.yaml`'s trend, cells, seeds and pass rule, in a follow-up PR: at the
-`source_sha` that merges the swarm-core pin bump to 6966421 (so with the 30 s
-history lifetime of #111), with the swarm-core and routing-bench commits
-`benchmark-cell.yml` builds at that commit (maintainer decision 2026-11-13,
-#105).
+by seed, for every cell (swarm-routing/ns3-tools#152). It supersedes
+`anchor.yaml` (`source_sha` c7d6acb, #101; never dispatched, kept unchanged
+as the record: it names swarm-core 0919dbf, which its cells would not have
+built, and `check_plan_deps.py` fails on it), whose trend, cells, seeds and
+pass rule it copies. A plan `anchor-2` at swarm-core 501dd7e was drafted in
+#113 and dropped before it reached `main`.
 
 ## Golden rules (invariants — do not break)
 
