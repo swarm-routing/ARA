@@ -58,8 +58,7 @@ void Router::age() {
     // in (destination, neighbour) order, so the report is deterministic.
     std::vector<std::pair<NodeAddress, NodeAddress>> before;
     for (const NodeAddress dest : table_.destinations()) {
-        for (const auto& e : table_.entries(dest))
-            before.emplace_back(dest, e.neighbor);
+        table_.forEach(dest, [&](const auto& e) { before.emplace_back(dest, e.neighbor); });
     }
     table_.evaporate(retain, config_.expiryThreshold);
     lastAged_ = now;
@@ -116,17 +115,10 @@ AntDecision Router::decided(AntDecision decision, NodeAddress dest) {
 }
 
 // Fidelity "Next-hop choice for data among the trails": the highest ϕ;
-// entries() is in ascending neighbour order, so a tie goes to the lowest.
+// bestEntry() gives a tie to the lowest neighbour and kInvalidAddress when no
+// ϕ > 0, with no allocation.
 NodeAddress Router::bestHop(NodeAddress dest) const {
-    NodeAddress best = kInvalidAddress;
-    double bestValue = 0.0;
-    for (const auto& e : table_.entries(dest)) {
-        if (e.value > bestValue) {
-            best = e.neighbor;
-            bestValue = e.value;
-        }
-    }
-    return best;
+    return table_.bestEntry(dest).neighbor;
 }
 
 // Fidelity "A node seeing a FANT for the first time records ...": ϕ raised to
