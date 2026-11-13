@@ -27,7 +27,7 @@ docs/       fidelity sheet (paper section -> implementation), parameters with so
 .github/workflows/core.yml   core/ alone: strict warnings, tests, ASan + UBSan, clang-format (check `core`)
 .github/workflows/swarm-core-pin.yml   the swarm-core pin is one SHA and current (check `swarm-core / pin`)
 .github/workflows/benchmark-cell.yml   one benchmark cell at a pinned source_sha (reusable-benchmark-cell.yml, build mode); dispatched by ns3-campaign
-tools/bench/campaigns/   campaign plans: smoke.yaml (the change-test smoke against the base)
+tools/bench/campaigns/   campaign plans: smoke.yaml (the change-test smoke against the base), anchor.yaml (the paper's trend, ARA vs AODV)
 ```
 
 ## Build & verify
@@ -111,6 +111,17 @@ is in flight, and the `grep` above (one swarm-core and one routing-bench
 commit across every cell) is the check that none did.
 State lives in `.campaign/<generation>/` (git-ignored); a cell's artifact is
 kept 7 days.
+
+`anchor.yaml` is the anchor (the third gate of org rule 6): the trend and pass
+rule of `docs/fidelity.md` "Anchor candidate" (ARA minus AODV, paired by seed;
+PDR CI above zero at pause 0 and 30 s, NRL CI below zero at pause 0; 120 and
+600 s reported), ARA and AODV in one `routing-compare` invocation per seed, 20
+seeds per cell in two blocks of 10, on ns3-dev 3.48-optimized by digest
+(ns-3.49's AODV livelocks, swarm-routing/ns3-containers#35). It has no
+`source_sha`, so `dispatch` refuses it until #5's backtracking slice sets
+one and pre-registers the run. Its one arm pairs protocols, not commits, so
+`verdicts` has nothing to compare for it yet: the ARA-minus-AODV read is an
+open item of #36.
 
 ## Golden rules (invariants — do not break)
 
