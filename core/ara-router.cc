@@ -336,11 +336,14 @@ FailureDecision Router::onRouteFailure(const DataKey& key, NodeAddress failed) {
     const NodeAddress dest = key.dest;
     age();
     dropTrail(dest, failed);  // fidelity "On a failed link": its ϕ to 0
-    if (const NodeAddress hop = bestHop(dest); hop != kInvalidAddress) {
+    // Another link, but not back where the packet came from: unflagged, the
+    // previous hop would take it for a loop (DUPLICATE_ERROR) and drop it.
+    const NodeAddress prev = dataHistory_.find(key);
+    if (const NodeAddress hop = bestHopExcept(dest, prev); hop != kInvalidAddress) {
         return {decided({swarm::core::RouteAction::Unicast, hop, std::nullopt}, dest), false};
     }
     // Fidelity "No other link": back to the previous hop (#15), up to the source.
-    if (const NodeAddress prev = dataHistory_.find(key); prev != kInvalidAddress) {
+    if (prev != kInvalidAddress) {
         return {decided({swarm::core::RouteAction::Unicast, prev, std::nullopt}, dest), true};
     }
     if (key.source == self_) {
@@ -351,6 +354,18 @@ FailureDecision Router::onRouteFailure(const DataKey& key, NodeAddress failed) {
         }
     }
     return {decided(AntDecision::drop(), dest), false};
+}
+
+NodeAddress Router::bestHopExcept(NodeAddress dest, NodeAddress except) const {
+    NodeAddress best = kInvalidAddress;
+    double bestValue = 0.0;
+    for (const auto& e : table_.entries(dest)) {
+        if (e.neighbor != except && e.value > bestValue) {
+            best = e.neighbor;
+            bestValue = e.value;
+        }
+    }
+    return best;
 }
 
 void Router::dropTrail(NodeAddress dest, NodeAddress over) {

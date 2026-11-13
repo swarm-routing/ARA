@@ -53,6 +53,15 @@ void TestFailureTakesAnotherLink(Checker& c) {
     c.check(d.decision.action == RouteAction::Unicast && d.decision.nextHop == 3 && !d.backtrack,
             "the failed link is dropped and the packet takes the other trail");
     c.check(h.router.pheromone(1, 2) == 0.0, "the failed link's ϕ is 0");
+
+    Harness back(5);
+    trail(back, 1, 2, 1);
+    trail(back, 1, 6, 2, 1);  // a trail toward 1 back over the previous hop
+    back.router.admitData(key, 6);
+    const FailureDecision b = back.router.onRouteFailure(key, 2);
+    c.check(b.decision.nextHop == 6 && b.backtrack,
+            "the only other trail leads back to the previous hop: a flagged backtrack, "
+            "not a forward the previous hop would take for a loop");
 }
 
 void TestFailureBacktracks(Checker& c) {

@@ -202,6 +202,8 @@ private:
     void reportState();
     AntDecision decided(AntDecision decision, NodeAddress dest);
     NodeAddress bestHop(NodeAddress dest) const;
+    /// bestHop() without the trail over `except`.
+    NodeAddress bestHopExcept(NodeAddress dest, NodeAddress except) const;
     void layTrail(NodeAddress toward, NodeAddress over, std::uint8_t hops);
     void reinforce(NodeAddress toward, NodeAddress over);
     void onForwardAnt(const AntMessage& ant, NodeAddress from);
