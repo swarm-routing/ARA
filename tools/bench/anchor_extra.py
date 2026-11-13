@@ -49,10 +49,20 @@ def load_stats():
     return stats_util
 
 
-def read_cell(path):
+def cell_path(path, root=REPO):
+    """The cell file's real path, which must lie inside `root` (this repository:
+    results/cells/ or .campaign/), so an argument cannot read a file elsewhere."""
+    real = os.path.realpath(path)
+    base = os.path.realpath(root)
+    if os.path.commonpath([real, base]) != base or not os.path.isfile(real):
+        sys.exit(f"{path}: not a cell file inside {base}")
+    return real
+
+
+def read_cell(path, root=REPO):
     """{arm: {seed: {"ctrlTx": float, "nrl_bytes": float}}} from one cell file."""
     runs = {}
-    with open(path) as f:
+    with open(cell_path(path, root)) as f:
         for line in f:
             if line.startswith("##RUN## "):
                 tok = line.split()
@@ -123,7 +133,7 @@ def self_test():
         p = os.path.join(d, "cell.txt")
         with open(p, "w") as f:
             f.write(cell)
-        runs = read_cell(p)
+        runs = read_cell(p, root=d)
         assert sorted(runs) == ["aodv", "ara"] and len(runs["ara"]) == 20, runs.keys()
         res = compare(stats_util, runs, "ara", "aodv")
         ma, mb, n, dm, lo, hi, pv = res["ctrlTx"]
@@ -139,11 +149,18 @@ def self_test():
         with open(bad, "w") as f:
             f.write("##RUN## 1 ara 80 3 20 5 2.0\n")
         try:
-            read_cell(bad)
+            read_cell(bad, root=d)
         except SystemExit as e:
             assert "without nrl_bytes" in str(e)
         else:
             raise AssertionError("a short ##RUN## line was read")
+        # A path outside the root is refused, never opened.
+        try:
+            read_cell(p, root=os.path.join(d, "elsewhere"))
+        except SystemExit as e:
+            assert "not a cell file inside" in str(e)
+        else:
+            raise AssertionError("a file outside the root was read")
     print("anchor_extra: self-test ok")
 
 
