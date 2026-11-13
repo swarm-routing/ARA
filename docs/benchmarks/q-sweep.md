@@ -1,14 +1,17 @@
 # The q sweep: 0.1 against 0.9
 
-**Status: complete (2026-11-13). The two readings do not differ materially.**
-The authors' 2003 chapter decreases the pheromone every second "with a factor
-of (1 − q) = 0.1" (Günes & Spaniol, IFIP Net-Con 2003,
-<https://doi.org/10.1007/978-0-387-35703-4_9>, §4.2). That reads as q = 0.1,
-the repo's default, or literally as q = 0.9. Against q = 0.1, q = 0.9 is worse
-on delivery only on the near-static mesh (−1.94 pp), adds a little routing
-load at pause 0, and leaves the anchor's comparison with AODV where it was.
-The ambiguity does not explain the v0.2.0 anchor's miss. The default stays 0.1
-pending the maintainer's decision on
+**Status: complete (2026-11-13). q = 0.9 delivers less on the near-static
+mesh; elsewhere its effect is not resolved; the anchor's comparison with AODV
+stays below zero with either.** The authors' 2003 chapter decreases the
+pheromone every second "with a factor of (1 − q) = 0.1" (Günes & Spaniol, IFIP
+Net-Con 2003, <https://doi.org/10.1007/978-0-387-35703-4_9>, §4.2), which reads
+as q = 0.1, the repo's default, or literally as q = 0.9. Against q = 0.1,
+q = 0.9 is −1.94 pp PDR [−3.48, −0.39] on the near-static mesh. In the other
+three cells the PDR intervals span zero: that is no difference shown, not
+equivalence shown (at pause 30 s the interval reaches −6.58 pp). NRL is
++0.12 [+0.04, +0.20] at pause 0. Neither reading brings ARA's PDR to AODV's at
+pause 0 or 30 s, so the ambiguity does not explain the v0.2.0 anchor's miss.
+The default stays 0.1 pending the maintainer's decision on
 [#140](https://github.com/swarm-routing/ARA/issues/140).
 
 [← Benchmark index](../benchmarks.md) · [Fidelity sheet](../fidelity.md#parameters) · [The v0.2.0 anchor](v0.2.0-anchor.md)
@@ -34,14 +37,15 @@ any dispatch, and `tools/bench/check_plan_deps.py` passed on it right before.
 
 ## Results
 
-Provenance (`check_plan_deps.py --cells`):
+Provenance (`python3 -I tools/bench/check_plan_deps.py tools/bench/campaigns/q-sweep.yaml --cells results/cells/q-sweep`):
 
 ```
 ok   8 cells, 12 ##PROV## lines: swarm-core@69664219b2edc63995614332cf9f651b1720622b, routing-bench@3d279b83392a00288050574cee4288f30205658b
 plan deps: ok
 ```
 
-`ns3-campaign verdicts tools/bench/campaigns/q-sweep.yaml --dir results/cells/q-sweep`:
+`python3 ../ns3-tools/python/ns3_tool/campaign.py verdicts tools/bench/campaigns/q-sweep.yaml --dir results/cells/q-sweep`
+(or `ns3-campaign verdicts ...` with ns3-tools installed):
 
 ```
 q09	anchor-p0	ara	paired 95% CI (n=20): dPDR -0.42 [-3.26,+2.42]pp p=0.433  d_d99 -0.30 [-0.85,+0.25]ms p=0.297  d_NRL +0.12 [+0.04,+0.20] p=0.0157 -> PAIRED-WORSE
@@ -62,8 +66,10 @@ q09	grid-rwp	ara - aodv	paired 95% CI (n=20): dPDR -17.33 [-20.82,-13.84]pp p=1.
 q09	static-mesh	ara - aodv	paired 95% CI (n=20): dPDR +2.82 [+1.41,+4.23]pp p=0.00206  d_d99 -228.55 [-260.90,-199.20]ms p=9.54e-05  d_NRL -19.19 [-20.52,-17.87] p=1.91e-06 -> PAIRED-IMPROVED
 ```
 
-`anchor_extra.py results/cells/q-sweep/*.txt` (ARA minus AODV per arm; the
-files without `-q09` are q01):
+`NS3_TOOL_PY=../ns3-tools/python/ns3_tool python3 -I tools/bench/anchor_extra.py results/cells/q-sweep/*.txt`
+(ARA minus AODV per arm; the files without `-q09` are q01; `NS3_TOOL_PY`
+names the directory holding ns3-tools' `stats_util.py`, the script's default
+being `../ns3-tools/python/ns3_tool`):
 
 ```
 anchor-p0-q-sweep-q09	ara - aodv	ctrlTx ara 13787.5 aodv 379446.8: d -365659.3 [-376110.7,-355207.9] (n=20) p=1.91e-06  nrl_bytes ara 1.0773 aodv 27.4811: d -26.4037 [-27.2129,-25.5945] (n=20) p=1.91e-06
@@ -79,8 +85,10 @@ static-mesh-q-sweep	ara - aodv	ctrlTx ara 1036.0 aodv 80970.4: d -79934.3 [-8470
 ## Reading
 
 - **Delivery.** q = 0.9 against q = 0.1 is −1.94 pp [−3.48, −0.39] on the
-  near-static mesh. In the other three cells the CI spans zero (−0.42, −2.86,
-  −1.38 pp).
+  near-static mesh. There, ARA's `# diag` lines show flows with no delivery at
+  all in 5 of the 20 seeds with q = 0.9 (one flow in 4 seeds, two in 1), and in
+  none with q = 0.1. In the other three cells the CI spans zero (−0.42, −2.86,
+  −1.38 pp): no difference shown, and none ruled out.
 - **Routing load.** NRL is +0.12 [+0.04, +0.20] at pause 0 and +0.01 on the
   mesh; elsewhere the CIs span zero. The routing-packet means move by a few
   percent either way.
@@ -92,9 +100,12 @@ static-mesh-q-sweep	ara - aodv	ctrlTx ara 1036.0 aodv 80970.4: d -79934.3 [-8470
 - **The anchor.** ARA minus AODV PDR at pause 0 and 30 s is −12.68 and
   −11.56 pp with q = 0.1, and −13.10 and −14.42 pp with q = 0.9. Neither
   reading reaches the anchor's gates.
-- **The prediction.** Expected to matter more than it did. Data refreshes a
-  flow's trail every second, and in these cells mobility breaks routes before
-  evaporation does.
+- **The prediction.** PDR down with q = 0.9 was expected everywhere; it is
+  shown only on the mesh. Why the effect is not resolved in the mobile cells is
+  not measured here. One hypothesis, untested: data refreshes a flow's trail
+  every second, so where routes break often, mobility removes trails before
+  evaporation does; on the mesh, where trails would otherwise persist, a trail
+  left a second without data can fall below the 0.01 threshold.
 
 ## The default path, at the anchor's scale
 
