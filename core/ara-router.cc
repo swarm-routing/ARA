@@ -73,17 +73,23 @@ void Router::age() {
         lastAged_ = now;
         return;
     }
-    // The table does not say which entries expired: compare before and after,
-    // in (destination, neighbour) order, so the report is deterministic.
-    std::vector<std::pair<NodeAddress, NodeAddress>> before;
+    // The table does not say which entries expired. Find them first with
+    // evaporate()'s own test (value * retain < floor), reading each row in
+    // place (no copy), into a reused buffer: steady state allocates nothing
+    // but destinations(). The order is (destination, neighbour), so the
+    // report is deterministic.
+    expiring_.clear();
     for (const NodeAddress dest : table_.destinations()) {
-        table_.forEach(dest, [&](const auto& e) { before.emplace_back(dest, e.neighbor); });
+        for (const auto& e : table_.row(dest)) {
+            if (e.value * retain < config_.expiryThreshold)
+                expiring_.emplace_back(dest, e.neighbor);
+        }
     }
-    table_.evaporate(retain, config_.expiryThreshold);
+    // A retain evaporate() refuses removes nothing: then nothing expired.
+    if (table_.evaporate(retain, config_.expiryThreshold) == 0) expiring_.clear();
     lastAged_ = now;
-    for (const auto& [dest, over] : before) {
-        if (!table_.contains(dest, over)) observer_->onRouteChanged(dest, over, false);
-    }
+    for (const auto& [dest, over] : expiring_)
+        observer_->onRouteChanged(dest, over, false);
     reportState();
 }
 
@@ -351,15 +357,9 @@ FailureDecision Router::onRouteFailure(const DataKey& key, NodeAddress failed,
 }
 
 NodeAddress Router::bestHopExcept(NodeAddress dest, NodeAddress except) const {
-    NodeAddress best = kInvalidAddress;
-    double bestValue = 0.0;
-    for (const auto& e : table_.entries(dest)) {
-        if (e.neighbor != except && e.value > bestValue) {
-            best = e.neighbor;
-            bestValue = e.value;
-        }
-    }
-    return best;
+    // The highest ϕ > 0 but `except`'s, a tie to the lowest neighbour, read in
+    // place (bestEntry, as bestHop).
+    return table_.bestEntry(dest, except).neighbor;
 }
 
 void Router::dropTrail(NodeAddress dest, NodeAddress over) {
