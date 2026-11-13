@@ -24,8 +24,10 @@ the statistics are the org's, not this script's.
 - nrl_bytes: the last field of `##RUN## <seed> <arm> pdr delay delay99
   thrput nrl jitter off50 off90 nrl_bytes` (ns3-tools docs/markers.md).
 
-stats_util is found at $NS3_TOOL_PY, else ../ns3-tools/python/ns3_tool next
-to this repository. `--self-test` runs on fixtures.
+A CELL is a path inside this repository (relative to its root, or absolute);
+any other is refused. stats_util is found at $NS3_TOOL_PY, else
+../ns3-tools/python/ns3_tool next to this repository. `--self-test` runs on
+fixtures.
 """
 
 import argparse
@@ -52,9 +54,9 @@ def load_stats():
 def cell_path(path, root=REPO):
     """The cell file's real path, which must lie inside `root` (this repository:
     results/cells/ or .campaign/), so an argument cannot read a file elsewhere."""
-    real = os.path.realpath(path)
     base = os.path.realpath(root)
-    if os.path.commonpath([real, base]) != base or not os.path.isfile(real):
+    real = os.path.realpath(os.path.join(base, path))
+    if not real.startswith(base + os.sep) or not os.path.isfile(real):
         sys.exit(f"{path}: not a cell file inside {base}")
     return real
 
