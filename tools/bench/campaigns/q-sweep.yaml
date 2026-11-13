@@ -1,0 +1,79 @@
+# Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
+# SPDX-License-Identifier: MIT OR GPL-2.0-only
+#
+# The q sweep (#140): the evaporation rate at its two readings in the authors'
+# 2003 chapter (Günes & Spaniol, IFIP Net-Con 2003,
+# https://doi.org/10.1007/978-0-387-35703-4_9, §4.2: the values are decreased
+# every T = 1 s "with a factor of (1 − q) = 0.1"). Read as q = 0.1 (factor
+# 0.9), the repo's default; read literally, q = 0.9 (factor 0.1). One commit,
+# 093b42c (#134 merged: core::Config's fields as ns-3 attributes), two arms that
+# differ only in EvaporationRate; identical seeds; on ns3-dev 3.48-optimized
+# (fb7596b) by digest, the anchor's image (ns-3.49's AODV livelocks,
+# swarm-routing/ns3-containers#35).
+#
+# Cells: the anchor's two gated cells (anchor-3.yaml's field at pause 0 and
+# 30 s, 900 s, 20 seeds in two blocks of 10) and the two families of smoke.yaml
+# (300 s, 20 seeds); AODV runs in the same invocation in every cell, so each
+# arm is also read against it (reference: aodv).
+#
+# Pre-registered here before any dispatch. What it measures (`verdicts`):
+#   - q09 minus q01, paired by seed, per cell: PDR, delay99, NRL with their
+#     95 % CIs (the switch-style A/B; no pass rule);
+#   - each arm's ARA minus AODV, paired by seed, per cell (the anchor's
+#     comparison, reported, not gated: anchor-3.yaml's verdict stands);
+#   - routing packets and nrl_bytes next to them (tools/bench/anchor_extra.py).
+# Expected, not gated: with q = 0.9 a trail falls tenfold per second, so a
+# flow's trail refreshed by one 0.1 deposit a second sits near the 0.01 expiry
+# threshold; PDR is expected to fall and routing packets to rise, most at high
+# mobility. Also expected: q01's anchor cells reproduce anchor-3's ARA and
+# AODV ##RUN## lines byte for byte (the default path is unchanged since 71d2166:
+# #112's switch is off, #134's attributes default to core::Config{}).
+# The default stays q = 0.1; a default moves only by the maintainer's decision
+# after this A/B, recorded on #140.
+#
+# Dependencies, as .github/workflows/benchmark-cell.yml builds them at main on
+# 2026-11-13 (check_plan_deps.py, #105): swarm-core@69664219b2edc63995614332cf9f651b1720622b
+# routing-bench@3d279b83392a00288050574cee4288f30205658b; 093b42c pins the same
+# swarm-core (SWARM_CORE_REF).
+#
+#   P=tools/bench/campaigns/q-sweep.yaml
+#   C="python3 ../ns3-tools/python/ns3_tool/campaign.py"   # or `ns3-campaign`
+#   $C plan $P                                      # 12 jobs; dispatches nothing
+#   python3 -I tools/bench/check_plan_deps.py $P   # again right before dispatch: plan deps: ok
+#   $C dispatch $P --cap 4
+#   $C status $P --brief
+#   $C collect $P --out .campaign/q-sweep/cells
+#   python3 -I tools/bench/check_plan_deps.py $P --cells .campaign/q-sweep/cells
+#   $C verdicts $P --dir .campaign/q-sweep/cells   # q09 - q01, and each arm's ara - aodv
+#   python3 -I tools/bench/anchor_extra.py .campaign/q-sweep/cells/*.txt
+generation: q-sweep
+ref: main
+repo: swarm-routing/ARA
+source_sha: 093b42ceb7e19c17207d558220a4008a9862870e
+workflow: benchmark-cell.yml
+program: routing-compare
+image: ghcr.io/swarm-routing/ns3-dev@sha256:5585a93c5cea1980592539e2d26a4e111e0ff4b0cc63b3dfd6ea5de459d80d3f
+# 12 jobs; at most 4 cell runs at once, so PR CI keeps runners.
+cap: 4
+control: q01
+# The arms differ only in their attributes: same commit, image and seeds;
+# `plan` and `dispatch` refuse the plan if anything else differs (#89).
+isolates: args
+# Every protocol of a cell is also paired against AODV, by seed (#152).
+reference: aodv
+
+arms:
+  q01: ""
+  q09: "--ns3::ara::RoutingProtocol::EvaporationRate=0.9"
+
+x-field: &field "--scenario=paper --nNodes=50 --time=900 --areaX=1500 --areaY=300 --speed=10 --flows=10 --runs=10 --diag --protocols=ara,aodv"
+cells:
+  # anchor-3.yaml's gated cells, 20 seeds in two jobs of 10 (--firstRun=1, 11)
+  anchor-p0: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: *field, extraArgs: "--pause=0"}, blocks: [1, 11]}
+  anchor-p30: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: *field, extraArgs: "--pause=30"}, blocks: [1, 11]}
+  # smoke.yaml's families, with AODV beside ARA
+  grid-rwp: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: "--scenario=paper --nNodes=50 --time=300 --areaX=1500 --areaY=300 --speed=20 --pause=30 --range=300 --propagation=range --mobility=rwp --transport=udp --diag --firstRun=1 --runs=20 --protocols=ara,aodv"}}
+  static-mesh: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: "--scenario=paper --nNodes=50 --time=300 --areaX=1500 --areaY=300 --speed=20 --pause=300 --range=300 --propagation=range --mobility=rwp --transport=udp --diag --firstRun=1 --runs=20 --protocols=ara,aodv"}}
+
+jobs:
+  - {arms: [q01, q09], cells: "*"}
