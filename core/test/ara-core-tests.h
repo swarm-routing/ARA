@@ -30,6 +30,11 @@ void TestDataReinforcement(Checker& c);
 void TestDataKeepsTrailsAlive(Checker& c);
 void TestObserverCallbacks(Checker& c);
 void TestObserverIsReadOnly(Checker& c);
+void TestDuplicateData(Checker& c);
+void TestFailureTakesAnotherLink(Checker& c);
+void TestFailureBacktracks(Checker& c);
+void TestFailureAtSourceRediscovers(Checker& c);
+void TestBacktrackOnADiamond(Checker& c);
 
 struct NamedTest {
     const char* name;

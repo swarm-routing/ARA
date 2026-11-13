@@ -69,6 +69,7 @@ add_executable(ara_core_tests
   test/all-tests.cc
   test/run-core-tests.cc
   test/test-ant-codec.cc
+  test/test-failure.cc
   test/test-maintenance.cc
   test/test-network.cc
   test/test-observer.cc
