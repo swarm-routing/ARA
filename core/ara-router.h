@@ -7,8 +7,12 @@
 // pheromone trails they lay, evaporation and the deterministic next-hop
 // choice, and the discovery retries of the 2026-11-10 decisions (#4, #5).
 // The second is route maintenance by data ([G02] §3.2): every data hop adds
-// Δϕ toward both ends. Duplicate errors and route-failure backtracking
-// ([G02] §3.2, §3.3) are the next slices.
+// Δϕ toward both ends. The third is loop prevention and route failure
+// ([G02] §3.2, §3.3): duplicate data goes back with DUPLICATE_ERROR and its
+// sender drops that link; a failed link is dropped and the packet takes
+// another, or backtracks to the previous hop, up to the source, which starts
+// a new discovery (fidelity rows "Loop prevention", "On a failed link", "No
+// other link").
 //
 // The router never touches a simulator (golden rule 10). Time, randomness and
 // deferred work come through swarm-core's ports; every ant it sends leaves
@@ -42,6 +46,23 @@
 namespace ara::core {
 
 using AntDecision = swarm::core::RouteDecision<AntMessage>;
+
+/// A data packet's identity for duplicate detection: fidelity "Data packet
+/// 'sequence number' used for duplicate detection", the key (source,
+/// destination, IP protocol, IP identification) of #4 and #5.
+struct DataKey {
+    NodeAddress source = swarm::core::kInvalidAddress;
+    NodeAddress dest = swarm::core::kInvalidAddress;
+    std::uint8_t protocol = 0;
+    std::uint16_t id = 0;
+    auto operator<=>(const DataKey&) const = default;
+};
+
+/// What to do with a data packet whose next hop failed, or that came back.
+struct FailureDecision {
+    AntDecision decision;    ///< Unicast to the next hop, or Drop
+    bool backtrack = false;  ///< the next hop is the previous one: send it flagged
+};
 
 class Router {
 public:
@@ -84,6 +105,31 @@ public:
 
     /// An ant arrived from the one-hop neighbour `from`.
     void onAnt(const AntMessage& ant, NodeAddress from);
+
+    /// A data packet `key` arrived from `prev` (kInvalidAddress: this node
+    /// originates it). False when the key was seen before: a loop ([G02]
+    /// §3.2), and the packet goes back to `prev` with DUPLICATE_ERROR. The
+    /// first sighting records `prev` for backtracking, in a history bounded by
+    /// historyCapacity (fidelity "Ant and data dedup history size", #5). A
+    /// packet that comes back flagged Backtrack is no duplicate: do not call
+    /// this for it, call onRouteFailure.
+    bool admitData(const DataKey& key, NodeAddress prev);
+    /// A data packet for `dest` came back from `from` with DUPLICATE_ERROR:
+    /// that link is deactivated, its ϕ set to 0 ([G02] §3.2).
+    void onDuplicateError(NodeAddress dest, NodeAddress from);
+    /// Data packet `key` could not go over `failed`: the MAC gave up on it, or
+    /// `failed` sent it back flagged Backtrack ([G02] §3.3). The link's ϕ goes
+    /// to 0 and the packet takes another trail if one exists; otherwise it
+    /// backtracks to the hop it came from (fidelity "No other link", #15). At
+    /// the source, with no trail left, a discovery starts and the packet is
+    /// dropped (no buffering, #4); a relay that no longer knows the previous
+    /// hop (evicted from the history) drops it.
+    /// `cameFrom`: the hop the caller knows the packet came from (the MAC's
+    /// report carries it), used when the history no longer holds the key, so
+    /// a packet that waited at the MAC past the history's cap still finds its
+    /// way back; kInvalidAddress when the caller does not know.
+    FailureDecision onRouteFailure(const DataKey& key, NodeAddress failed,
+                                   NodeAddress cameFrom = swarm::core::kInvalidAddress);
 
     /// The neighbour with the highest pheromone toward `dest` (ties: the
     /// lowest address), or kInvalidAddress when there is no trail. Fidelity
@@ -133,7 +179,25 @@ private:
         std::deque<Key> order_;
     };
 
+    /// DataKey -> the hop the packet came from, kept for backtracking; the
+    /// data dedup history, bounded by historyCapacity, oldest evicted first.
+    class DataHistory {
+    public:
+        explicit DataHistory(std::size_t capacity);
+        /// False when `key` is already there (its first hop is kept).
+        bool record(const DataKey& key, NodeAddress previousHop);
+        /// The hop `key` came from; kInvalidAddress when unknown or originated here.
+        NodeAddress find(const DataKey& key) const;
+        std::size_t size() const { return hops_.size(); }
+
+    private:
+        std::size_t capacity_;
+        std::map<DataKey, NodeAddress> hops_;
+        std::deque<DataKey> order_;
+    };
     void age();
+    /// Removes (dest, over), telling the observer when it existed.
+    void dropTrail(NodeAddress dest, NodeAddress over);
     /// The sink, after telling the observer (an ant is kAntWireSize bytes).
     void emit(const AntDecision& decision);
     /// Table writes that tell the observer of a new entry and a new size.
@@ -143,6 +207,8 @@ private:
     void reportState();
     AntDecision decided(AntDecision decision, NodeAddress dest);
     NodeAddress bestHop(NodeAddress dest) const;
+    /// bestHop() without the trail over `except`.
+    NodeAddress bestHopExcept(NodeAddress dest, NodeAddress except) const;
     void layTrail(NodeAddress toward, NodeAddress over, std::uint8_t hops);
     void reinforce(NodeAddress toward, NodeAddress over);
     void onForwardAnt(const AntMessage& ant, NodeAddress from);
@@ -163,6 +229,7 @@ private:
     swarm::core::DedupHistory fantHistory_;
     swarm::core::DedupHistory bantHistory_;
     ReversePointers reverse_;
+    DataHistory dataHistory_;
     std::map<NodeAddress, Discovery> discoveries_;
     std::uint32_t nextSequence_ = 1;
     Time lastAged_;

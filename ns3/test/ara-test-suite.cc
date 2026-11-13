@@ -236,6 +236,7 @@ struct ChainRun {
     uint64_t bants = 0;
     Ipv4Address nextHop0;  ///< node 0's next hop to node 3 after the run
     Ipv4Address nextHop1;  ///< node 1's
+    Ipv4Address nextHop2;  ///< node 2's
     Ipv4Address expect0;   ///< node 1's address
     Ipv4Address expect1;   ///< node 2's address
     DeferredQueueStats queue0;
@@ -257,7 +258,7 @@ class Chain {
 public:
     /// `observe` connects the router observer's trace sources, which must not
     /// change the run (org rule 5).
-    ChainRun Run(uint32_t seed, uint32_t packets, bool observe = false) {
+    ChainRun Run(uint32_t seed, uint32_t packets, bool observe = false, double moveAt = 0.0) {
         SwarmCoreSeed(seed);
         NodeContainer nodes;
         nodes.Create(4);
@@ -298,10 +299,17 @@ public:
         for (uint32_t k = 0; k < packets; ++k) {
             Simulator::Schedule(Seconds(1.0 + 0.5 * k), &Chain::Send, this);
         }
+        if (moveAt > 0.0) {  // the destination walks out of every node's range
+            Ptr<Node> dst = nodes.Get(3);
+            Simulator::Schedule(Seconds(moveAt), [dst]() {
+                dst->GetObject<MobilityModel>()->SetPosition(Vector(5000.0, 0.0, 0.0));
+            });
+        }
         Simulator::Stop(Seconds(2.0 + 0.5 * packets));
         Simulator::Run();
         m_run.nextHop0 = Proto(nodes.Get(0))->NextHop(m_dst);
         m_run.nextHop1 = Proto(nodes.Get(1))->NextHop(m_dst);
+        m_run.nextHop2 = Proto(nodes.Get(2))->NextHop(m_dst);
         m_run.expect0 = ifs.GetAddress(1);
         m_run.expect1 = ifs.GetAddress(2);
         m_run.queue0 = Proto(nodes.Get(0))->GetDeferredQueue()->Stats();
@@ -395,6 +403,30 @@ private:
         NS_TEST_EXPECT_MSG_EQ(r.queue0.enqueued, 1u, "only the first packet found no trail");
         NS_TEST_EXPECT_MSG_EQ(r.nextHop0, r.expect0, "node 0 still routes over node 1");
         NS_TEST_EXPECT_MSG_EQ(r.nextHop1, r.expect1, "node 1 still routes over node 2");
+    }
+};
+
+/// [G02] §3.3 end to end: the destination walks away at 5.25 s; the next
+/// packet's MAC failure at node 2 backtracks it through node 1 to the source,
+/// each hop dropping its dead trail, and the source starts a new discovery.
+class BacktrackTestCase : public TestCase {
+public:
+    BacktrackTestCase()
+        : TestCase("adapter: a failed link backtracks the packet to the source ([G02] §3.3)") {}
+
+private:
+    void DoRun() override {
+        const ChainRun r = Chain().Run(1, 12, false, 5.25);
+        NS_TEST_EXPECT_MSG_EQ(r.received, 8u, "the packets before the move delivered");
+        NS_TEST_EXPECT_MSG_EQ(r.nextHop2, Ipv4Address(), "node 2 dropped its trail over node 3");
+        NS_TEST_EXPECT_MSG_EQ(r.nextHop1, Ipv4Address(), "node 1 dropped its trail over node 2");
+        NS_TEST_EXPECT_MSG_EQ(r.nextHop0, Ipv4Address(), "the source dropped its trail");
+        uint32_t fantsAfter = 0;
+        for (const std::string& line : r.trace) {
+            const double t = std::stod(line.substr(0, line.find(' '))) * 1e-9;
+            fantsAfter += t > 5.25 && line.find(" n0 tx type=1 bcast") != std::string::npos;
+        }
+        NS_TEST_EXPECT_MSG_GT(fantsAfter, 0u, "the source started a new discovery");
     }
 };
 
@@ -566,6 +598,7 @@ public:
         AddTestCase(new HeaderPrintTestCase, TestCase::Duration::QUICK);
         AddTestCase(new ChainDeliveryTestCase, TestCase::Duration::QUICK);
         AddTestCase(new MaintenanceTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new BacktrackTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DeterminismTestCase, TestCase::Duration::QUICK);
         AddTestCase(new ObserverTestCase, TestCase::Duration::QUICK);
         AddTestCase(new AdapterGuardsTestCase, TestCase::Duration::QUICK);

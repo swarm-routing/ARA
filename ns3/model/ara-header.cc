@@ -67,5 +67,43 @@ std::optional<core::AntMessage> DecodeAntPacket(Ptr<const Packet> p) {
     return core::decodeAnt(bytes);
 }
 
+NS_OBJECT_ENSURE_REGISTERED(DataFlagTag);
+
+TypeId DataFlagTag::GetTypeId() {
+    static TypeId tid = TypeId("ns3::ara::DataFlagTag")
+                            .SetParent<Tag>()
+                            .SetGroupName("Ara")
+                            .AddConstructor<DataFlagTag>();
+    return tid;
+}
+
+TypeId DataFlagTag::GetInstanceTypeId() const {
+    return GetTypeId();
+}
+
+uint32_t DataFlagTag::GetSerializedSize() const {
+    return 1;
+}
+
+void DataFlagTag::Serialize(TagBuffer i) const {
+    i.WriteU8(m_flag);
+}
+
+void DataFlagTag::Deserialize(TagBuffer i) {
+    const uint8_t f = i.ReadU8();
+    m_flag = f == Backtrack ? Backtrack : f == DuplicateError ? DuplicateError : None;
+}
+
+void DataFlagTag::Print(std::ostream& os) const {
+    os << (m_flag == Backtrack        ? "backtrack"
+           : m_flag == DuplicateError ? "duplicate-error"
+                                      : "none");
+}
+
+DataFlagTag::Flag ReadDataFlag(Ptr<const Packet> p) {
+    DataFlagTag tag;
+    return p && p->PeekPacketTag(tag) ? tag.Get() : DataFlagTag::None;
+}
+
 }  // namespace ara
 }  // namespace ns3

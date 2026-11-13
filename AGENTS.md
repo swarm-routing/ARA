@@ -7,7 +7,7 @@ before changing anything. Org-wide conventions:
 
 ## What this repo is
 
-**Status: `core/` and `ns3/` in progress (Phase 3, #5).** The core's first slice, route discovery (FANT/BANT, trails, evaporation, next hop, discovery retries, the ant wire header), builds and tests on its own and inside ns-3 as the contrib module `ara`, whose adapter carries it out on swarm-core's `SwarmRoutingBase`; data reinforcement and the router observer are in; duplicate errors and route-failure backtracking come next, then the anchor.
+**Status: `core/` and `ns3/` in progress (Phase 3, #5).** The core's first slice, route discovery (FANT/BANT, trails, evaporation, next hop, discovery retries, the ant wire header), builds and tests on its own and inside ns-3 as the contrib module `ara`, whose adapter carries it out on swarm-core's `SwarmRoutingBase`; data reinforcement, the router observer, and duplicate errors with route-failure backtracking ([G02] §3.2–3.3, core only) are in; the adapter wiring of the last (on swarm-core's `OnDataUndelivered`/`ResendData`) comes next, then the anchor.
 
 ARA, the Ant-Colony-Based Routing Algorithm (Güneş, Sorges & Bouazizi, 2002),
 as a standalone hexagonal protocol: a simulator-agnostic `core/` and an ns-3
@@ -26,6 +26,8 @@ ns3/        (planned) contrib module `ara` (GPL-2.0-only): header codec, adapter
 docs/       fidelity sheet (paper section -> implementation), parameters with sources
 .github/workflows/core.yml   core/ alone: strict warnings, tests, ASan + UBSan, clang-format (check `core`)
 .github/workflows/swarm-core-pin.yml   the swarm-core pin is one SHA and current (check `swarm-core / pin`)
+.github/workflows/benchmark-cell.yml   one benchmark cell at a pinned source_sha (reusable-benchmark-cell.yml, build mode); dispatched by ns3-campaign
+tools/bench/campaigns/   campaign plans: smoke.yaml (the change-test smoke against the base), anchor.yaml (the paper's trend, ARA vs AODV)
 ```
 
 ## Build & verify
@@ -74,6 +76,52 @@ swarm-core=swarm-routing/ns3-swarm-core@main` and
 `routing-compare --scenario=paper --nNodes=20 --time=30 --runs=1
 --protocols=ara` as the smoke and `ara-example --seed={seed}` as the
 determinism program.
+
+Benchmarks (#36, swarm-routing/.github#156): change tests and the anchor
+run here, released versions in swarm-routing/benchmarks (its ADR-0002).
+`.github/workflows/benchmark-cell.yml` is a thin caller of
+swarm-routing/.github's `reusable-benchmark-cell.yml` in build mode: each cell
+checks out its `source_sha`, builds `ara` with swarm-core at
+`SWARM_CORE_REF` and routing-bench at a pinned ns3-tools commit on the ns3-dev
+image given by digest, and runs `routing-compare`. Campaign plans live in
+`tools/bench/campaigns/` and run through `ns3-campaign` (swarm-routing/ns3-tools
+`python/ns3_tool/change_plan.py`; its docstring is the plan format).
+`smoke.yaml` is the change-test smoke: ARA at a PR's head against its base,
+two families (`grid-rwp`, `static-mesh`), 20 paired seeds. For a PR that
+changes `core/` or `ns3/`, copy it with a new `generation` and the PR's base
+and head commits in `pins`, then:
+
+```bash
+pip install pyyaml                                    # a YAML plan needs PyYAML
+C="python3 ../ns3-tools/python/ns3_tool/campaign.py"   # or ns3-campaign (pip install ../ns3-tools/python)
+$C plan P.yaml                                        # every job; dispatches nothing
+$C dispatch P.yaml --cap 4                            # resumable: re-run until every label is logged
+$C status P.yaml --brief                              # poll lightly (15 min)
+G=$(python3 -c 'import sys,yaml; print(yaml.safe_load(open(sys.argv[1]))["generation"])' P.yaml)
+$C collect P.yaml --out ".campaign/$G/cells"          # rejects a cell whose ##PROV## is not its pin
+grep -ho '\(swarm-core\|routing-bench\)@[0-9a-f]*' ".campaign/$G/cells"/*.txt | sort -u   # must print 2 lines
+$C verdicts P.yaml --dir ".campaign/$G/cells"         # head minus base, paired 95 % CI per cell
+```
+
+and put the `verdicts` lines in the PR (no hand numbers, ns3-tools rule 13).
+The dependency commits come from `benchmark-cell.yml` at the dispatch ref
+(`main`), not from the plan, and `collect` checks only `source_sha` and the
+image: do not merge a change to that file's `dependencies` while a campaign
+is in flight, and the `grep` above (one swarm-core and one routing-bench
+commit across every cell) is the check that none did.
+State lives in `.campaign/<generation>/` (git-ignored); a cell's artifact is
+kept 7 days.
+
+`anchor.yaml` is the anchor (the third gate of org rule 6): the trend and pass
+rule of `docs/fidelity.md` "Anchor candidate" (ARA minus AODV, paired by seed;
+PDR CI above zero at pause 0 and 30 s, NRL CI below zero at pause 0; 120 and
+600 s reported), ARA and AODV in one `routing-compare` invocation per seed, 20
+seeds per cell in two blocks of 10, on ns3-dev 3.48-optimized by digest
+(ns-3.49's AODV livelocks, swarm-routing/ns3-containers#35). It has no
+`source_sha`, so `dispatch` refuses it until #5's backtracking slice sets
+one and pre-registers the run. Its one arm pairs protocols, not commits, so
+`verdicts` has nothing to compare for it yet: the ARA-minus-AODV read is an
+open item of #36.
 
 ## Golden rules (invariants — do not break)
 
