@@ -1,0 +1,63 @@
+# Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
+# SPDX-License-Identifier: MIT OR GPL-2.0-only
+#
+# ARA's change smoke (#36): ARA at a change against ARA at its base, paired on
+# identical seeds (org rule 6), 2 families x 20 seeds, through this
+# repository's .github/workflows/benchmark-cell.yml (build mode: swarm-core,
+# routing-bench and ara=ns3 built in the job, on the ns3-dev optimized image
+# below, by digest). Run it on demand for any PR that changes core/ or ns3/,
+# and record its verdict in the PR.
+#
+# Before a run, set the pins: `base` to the PR's base commit on main, `change`
+# to the PR's head commit (both 40 hex); keep `ref: main` unless the PR
+# changes .github/workflows/benchmark-cell.yml (a dependency pin): then `ref`
+# is the PR's branch, so both arms build its dependencies. Bump `image` to the
+# current ghcr.io/swarm-routing/ns3-dev:latest-optimized digest when the
+# supported ns-3 release moves. Give each run its own `generation` (e.g.
+# smoke-pr<N>): the state directory .campaign/<generation>/ and the labels are
+# keyed by it, and dispatch refuses to re-pin an arm it already dispatched.
+#
+#   P=tools/bench/campaigns/smoke.yaml
+#   ns3-campaign plan     $P                  # every job; dispatches nothing
+#   ns3-campaign dispatch $P --wait           # 4 jobs, at most `cap` cell runs at once
+#   ns3-campaign status   $P --brief
+#   ns3-campaign collect  $P --out .campaign/smoke/cells
+#   ns3-campaign verdicts $P --dir .campaign/smoke/cells
+#
+# The pins committed here are the pipeline's first run (#36): base 94662a6
+# (#61, the last change to core/ or ns3/) against change 01794b1 (main before
+# #36's PR). ARA's code is the same in both, so the verdict is expected to be
+# a zero delta on every metric: an A/A check of the pipeline and of org rule 5.
+generation: smoke
+ref: main
+repo: swarm-routing/ARA
+workflow: benchmark-cell.yml
+program: routing-compare
+# ns3-dev:latest-optimized (= 3.49-optimized) on 2026-11-13. ARA alone runs
+# on 3.49; the AODV livelock that keeps the anchor on 3.48
+# (ns3-containers#35) does not concern this plan.
+image: ghcr.io/swarm-routing/ns3-dev@sha256:b185a97c1b13ca531c65af253c7238e8ef3a1cc73ab8c71057e431454a7295e5
+pins:
+  base: {source_sha: 94662a68ed85c9589afcd09b80b1655d72118766}
+  change: {source_sha: 01794b1616ae25c9cce56bbba3cd9f9b0033c769}
+# At most 4 cell runs at once (the plan has 4): PR CI keeps the account's
+# other runners.
+cap: 4
+control: base
+
+arms:
+  base: ""
+  change: ""
+
+# Two families, ARA alone, 20 seeds each (RngRun 1..20, the same for both
+# arms): v2.5.0's anchor field ([G02] §4.1: 50 nodes, 1500 m x 300 m, RWP up
+# to 10 m/s, 10 CBR flows; docs/fidelity.md), shortened to 300 s.
+x-field: &field "--scenario=paper --nNodes=50 --time=300 --areaX=1500 --areaY=300 --speed=10 --flows=10 --runs=20 --firstRun=1 --diag --protocols=ara"
+cells:
+  # mobile: random waypoint, 30 s pauses
+  manet-p30: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: *field, extraArgs: "--pause=30"}}
+  # static: the pause outlasts the run, so no node moves
+  static-p300: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: *field, extraArgs: "--pause=300"}}
+
+jobs:
+  - {arms: [base, change], cells: "*"}

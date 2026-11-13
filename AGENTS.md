@@ -26,6 +26,8 @@ ns3/        (planned) contrib module `ara` (GPL-2.0-only): header codec, adapter
 docs/       fidelity sheet (paper section -> implementation), parameters with sources
 .github/workflows/core.yml   core/ alone: strict warnings, tests, ASan + UBSan, clang-format (check `core`)
 .github/workflows/swarm-core-pin.yml   the swarm-core pin is one SHA and current (check `swarm-core / pin`)
+.github/workflows/benchmark-cell.yml   one benchmark cell (dispatch only), on swarm-routing/.github's reusable-benchmark-cell.yml
+tools/bench/campaigns/   the paired campaign plans: smoke.yaml (change vs base), anchor.yaml (the paper's trend, ARA vs AODV)
 ```
 
 ## Build & verify
@@ -40,10 +42,11 @@ cmake -S core -B build/asan -DARA_CORE_SANITIZE=ON -DSWARM_CORE_DIR=/path/to/ns3
 It fetches swarm-core at `SWARM_CORE_REF` unless `SWARM_CORE_DIR` names a
 checkout's `core/`; bump the pin together with `core-deps` in
 `.github/workflows/licence.yml` and `.github/workflows/ns3.yml`, and
-`SWARM_CORE_REF` in the `Makefile`. The ns-3 module builds on swarm-core
+`SWARM_CORE_REF` in the `Makefile`, and the swarm-core dependency of
+`.github/workflows/benchmark-cell.yml`. The ns-3 module builds on swarm-core
 `main` instead; the `swarm-core / pin` check (`swarm-core-pin.yml`, on
 swarm-routing/.github's `reusable-swarm-core-pin.yml`) fails when main's
-`core/` is no longer the pinned one, or when the four places name different
+`core/` is no longer the pinned one, or when these places name different
 SHAs, so a swarm-core change is met by a pin bump here.
 
 CI for `ns3/` is [`reusable-ns3-ci.yml`](https://github.com/swarm-routing/.github/blob/main/.github/workflows/reusable-ns3-ci.yml):
@@ -74,6 +77,47 @@ swarm-core=swarm-routing/ns3-swarm-core@main` and
 `routing-compare --scenario=paper --nNodes=20 --time=30 --runs=1
 --protocols=ara` as the smoke and `ara-example --seed={seed}` as the
 determinism program.
+
+### Benchmark campaigns (paired, on the org reusable cell)
+
+ARA benchmarks its changes against its base, paired on identical seeds (org
+rule 6), in its own pipeline (#36): `.github/workflows/benchmark-cell.yml`, a
+dispatch-only caller of swarm-routing/.github's `reusable-benchmark-cell.yml`,
+runs one cell. It checks out the plan's `source_sha` (whatever ref it was
+dispatched at), builds swarm-core (at the pinned `SWARM_CORE_REF`),
+routing-bench (at the commit the caller pins) and `ara=ns3` in the ns3-dev
+image the plan names by digest (`-optimized`), runs the harness and uploads
+`benchmark-cell` (`results.txt` with `##ARGS##`/`##PROV##`, 7 days). The
+plans in `tools/bench/campaigns/` are cells x arms, driven by `ns3-campaign`
+from swarm-routing/ns3-tools (`pip install "./python"` in a checkout of it,
+plus PyYAML; `gh` logged in with workflow dispatch rights on this repo):
+
+```bash
+P=tools/bench/campaigns/smoke.yaml
+ns3-campaign plan     $P                                 # every job and its command; dispatches nothing
+ns3-campaign dispatch $P --wait                          # throttled at the plan's cap; resumable
+ns3-campaign status   $P --brief                         # the labels not yet successful
+ns3-campaign collect  $P --out .campaign/smoke/cells     # rejects a cell whose ##PROV## is not its arm's pin
+ns3-campaign verdicts $P --dir .campaign/smoke/cells     # change minus base, paired 95 % CI per metric
+```
+
+- **Smoke** (`smoke.yaml`): ARA at a change (arm `change`) against ARA at
+  its base (arm `base`), two families (mobile, static) x 20 seeds. Run it on
+  demand for a PR that changes `core/` or `ns3/`: set `pins.base.source_sha`
+  to the PR's base commit, `pins.change.source_sha` to its head, a fresh
+  `generation` (state is kept in `.campaign/<generation>/`, git-ignored), and
+  paste the `verdicts` output into the PR. A PR that changes this workflow's
+  dependency pins sets `ref` to its branch, so both arms build them.
+- **Anchor** (`anchor.yaml`): the paper's trend (`docs/fidelity.md` "Anchor
+  candidate"), ARA and AODV in one invocation per seed, pauses 0/30/120/600 s,
+  20 seeds, on ns3-dev 3.48-optimized (ns-3.49's AODV livelock). It has no
+  `source_sha` until #5's backtracking slice lands and pre-registers it, so
+  `dispatch` refuses it until then.
+
+`cap` (at most 4 cell runs queued or running at once, counted over this
+workflow) leaves the account's other runners to PR CI; `--cap N` overrides it
+for one dispatch. Bump the plans' `image` digest when the ns3-dev image the
+plan names moves on purpose, never to a tag.
 
 ## Golden rules (invariants — do not break)
 
