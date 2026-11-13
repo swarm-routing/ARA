@@ -1,0 +1,3 @@
+/tmp/claude-0/-home-user/844ef203-bb92-5474-822f-3dad885c668a/scratchpad/pin43/ARA/build/core/_deps/swarm_core_src-subbuild/CMakeFiles/swarm_core_src-populate.dir
+/tmp/claude-0/-home-user/844ef203-bb92-5474-822f-3dad885c668a/scratchpad/pin43/ARA/build/core/_deps/swarm_core_src-subbuild/CMakeFiles/edit_cache.dir
+/tmp/claude-0/-home-user/844ef203-bb92-5474-822f-3dad885c668a/scratchpad/pin43/ARA/build/core/_deps/swarm_core_src-subbuild/CMakeFiles/rebuild_cache.dir
