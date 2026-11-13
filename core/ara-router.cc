@@ -120,8 +120,9 @@ AntDecision Router::decided(AntDecision decision, NodeAddress dest) {
     return decision;
 }
 
-// Fidelity "Next-hop choice for data among the trails": the highest ϕ > 0,
-// a tie to the lowest neighbour; bestEntry() reads the row in place.
+// Fidelity "Next-hop choice for data among the trails": the highest ϕ;
+// bestEntry() gives a tie to the lowest neighbour and kInvalidAddress when no
+// ϕ > 0, with no allocation.
 NodeAddress Router::bestHop(NodeAddress dest) const {
     return table_.bestEntry(dest).neighbor;
 }
