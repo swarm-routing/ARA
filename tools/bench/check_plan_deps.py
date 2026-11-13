@@ -18,9 +18,12 @@ revision with --rev, e.g. HEAD) and fails unless:
 
   1. core/CMakeLists.txt at every `source_sha` of the plan pins, as
      SWARM_CORE_REF, the swarm-core commit the workflow builds: the commit
-     under test was written and tested by CI with that swarm-core (a
-     `source_sha` that is not a 40-char commit, quoted or not, fails: none
-     is skipped);
+     under test was written and tested by CI with that swarm-core. The plan
+     is parsed as ns3-campaign parses it (PyYAML for .yaml/.yml, tomllib,
+     json), and `source_sha` is read where ns3-campaign reads it: the plan's
+     own and every `pins.<arm>.source_sha`. So a key or a value is what the
+     parser makes of it, however it is spelled (quoted, escaped, aliased); a
+     value that is not a 40-char commit fails, and none is skipped;
   2. the plan names every dependency of the workflow with its commit, as
      `<name>@<commit>` (the form of ##PROV## `modules=`) or as the workflow's
      own line `<name>=<owner>/<repo>@<commit>`, in a field or in its header,
@@ -30,18 +33,22 @@ revision with --rev, e.g. HEAD) and fails unless:
      in `modules=`.
 
 The last line is the verdict (`plan deps: ok` or `plan deps: FAIL (n)`); the
-exit status is 0 or 1. Standard library only; it needs `git` and the plan's
-commits in the local repository (`git fetch origin` first).
+exit status is 0 or 1. Standard library, plus PyYAML for a .yaml/.yml plan
+(as ns3-campaign; without it such a plan fails, it is never read by pattern);
+it needs `git` and the plan's commits in the local repository (`git fetch
+origin` first).
 
     python3 -I tools/bench/check_plan_deps.py --self-test
 """
 
 import argparse
+import json
 import pathlib
 import re
 import subprocess
 import sys
 import tempfile
+import tomllib
 
 SHA = r"[0-9a-f]{40}"
 DEP_LINE = re.compile(rf"^\s+([a-z0-9][a-z0-9-]*)=[\w.-]+/[\w.-]+@({SHA})(?::\S+)?\s*$", re.M)
@@ -53,21 +60,55 @@ def git(root, *args):
     return r.stdout if r.returncode == 0 else None
 
 
-def plan_field(text, key):
-    m = re.search(rf"^{key}:\s*(\S+)", text, re.M)
-    return m.group(1).strip("'\"") if m else None
+def load_plan(path):
+    """The plan as ns3-campaign loads it: (mapping, None) or (None, why not)."""
+    path = pathlib.Path(path)
+    ext = path.suffix.lower()
+    try:
+        if ext in (".yaml", ".yml"):
+            try:
+                import yaml
+            except ImportError:
+                return None, "a YAML plan needs PyYAML (pip install pyyaml), as ns3-campaign does"
+            plan = yaml.safe_load(path.read_text(encoding="utf-8"))
+        elif ext == ".toml":
+            plan = tomllib.loads(path.read_text(encoding="utf-8"))
+        elif ext == ".json":
+            plan = json.loads(path.read_text(encoding="utf-8"))
+        else:
+            return None, "a plan is a .yaml, .yml, .toml or .json file"
+    except Exception as e:  # noqa: BLE001  (each parser has its own error type)
+        return None, f"the plan does not parse: {type(e).__name__}: {' '.join(str(e).split())}"
+    return (plan, None) if isinstance(plan, dict) else (None, "the plan is not a mapping")
 
 
-def plan_source_shas(text):
-    """Every source_sha of the plan's fields (not of its comments), in order.
+def plan_source_shas(plan):
+    """Every source_sha ns3-campaign reads: the plan's own, then each pin's, in order.
 
-    Returns (commits, others): `others` are the values that are not a 40-char
-    commit, which ns3-campaign refuses too. A value may be quoted.
+    Returns (commits, problems): a problem is a value that is not a 40-char
+    commit, or a `pins` ns3-campaign refuses.
     """
-    fields = "\n".join(line.split("#", 1)[0] for line in text.splitlines())
-    values = [v.strip("'\"") for v in re.findall(r"\bsource_sha[\"']?\s*:\s*([^\s,}]*)", fields)]
-    shas = [v for v in values if re.fullmatch(SHA, v)]
-    return list(dict.fromkeys(shas)), [v for v in values if v not in shas]
+    values, problems = [], []
+    if "source_sha" in plan:
+        values.append(plan["source_sha"])
+    pins = plan.get("pins")
+    if pins is None:  # absent, or an empty `pins:`
+        pins = {}
+    # Stricter than ns3-campaign, which reads [], false and 0 as no pins.
+    if not isinstance(pins, dict):
+        return [], ["pins is not a mapping arm -> {source_sha, image}"]
+    for arm, pin in pins.items():
+        if not isinstance(pin, dict):
+            problems.append(f"pins.{arm} is not a mapping")
+        elif "source_sha" in pin:
+            values.append(pin["source_sha"])
+    shas = [v for v in values if isinstance(v, str) and re.fullmatch(SHA, v)]
+    problems += [
+        f"source_sha {v!r} is not a 40-char commit: it is not checked"
+        for v in values
+        if v not in shas
+    ]
+    return list(dict.fromkeys(shas)), problems
 
 
 def plan_names(text, name):
@@ -86,8 +127,12 @@ def check(root, plan_path, rev=None, cells=None, out=print):
         out(f"FAIL {msg}")
 
     text = pathlib.Path(plan_path).read_text(encoding="utf-8")
-    workflow = plan_field(text, "workflow") or "benchmark-cell.yml"
-    rev = rev or f"origin/{plan_field(text, 'ref') or 'main'}"
+    plan, why = load_plan(plan_path)
+    if plan is None:
+        fail(why)
+        return fails
+    workflow = str(plan.get("workflow") or "benchmark-cell.yml")
+    rev = rev or f"origin/{plan.get('ref') or 'main'}"
     # Both reach `git show`: a revision is never an option, a workflow is a file name.
     if rev.startswith("-") or not re.fullmatch(r"[\w./~^@{}-]+", rev):
         fail(f"{rev!r} is not a revision")
@@ -107,11 +152,11 @@ def check(root, plan_path, rev=None, cells=None, out=print):
     for name, commit in deps.items():
         out(f"     {wf_path} at {rev}: {name}@{commit}")
 
-    shas, others = plan_source_shas(text)
-    if not shas and not others:
+    shas, problems = plan_source_shas(plan)
+    if not shas and not problems:
         fail("the plan has no source_sha")
-    for value in others:
-        fail(f"source_sha {value!r} is not a 40-char commit: it is not checked")
+    for problem in problems:
+        fail(problem)
     for sha in shas:
         cmake = git(root, "show", f"{sha}:core/CMakeLists.txt")
         pin = PIN.search(cmake) if cmake else None
@@ -238,6 +283,29 @@ def self_test():
         p.write_text(f"{named}ref: main\npins:\n  base: {{source_sha: {old[:12]}}}\n"
                      f"  head: {{source_sha: {new}}}\n")  # fmt: skip
         expect("a source_sha that is not 40 hex digits", go(p), 1, "is not a 40-char commit")
+        # Spellings a pattern does not see and a parser does (review of #111): the
+        # stale base must be read in each.
+        p.write_text(f"{named}ref: main\npins:\n  base: {{\"source_\\x73ha\": {old}}}\n"
+                     f"  head: {{source_sha: {new}}}\n")  # fmt: skip
+        expect("an escaped key is read", go(p), 1, "pins swarm-core aaaaaaa")
+        p.write_text(f"{named}ref: main\nx-k: &k source_sha\npins:\n  base: {{*k : {old}}}\n"
+                     f"  head: {{source_sha: {new}}}\n")  # fmt: skip
+        expect("an aliased key is read", go(p), 1, "pins swarm-core aaaaaaa")
+        p.write_text(f"{named}ref: main\npins:\n  base: {{note: a#b, source_sha: {old}}}\n"
+                     f"  head: {{source_sha: {new}}}\n")  # fmt: skip
+        expect("a # inside a value is not a comment", go(p), 1, "pins swarm-core aaaaaaa")
+        p.write_text(f"{named}ref: main\npins: [unclosed\n")
+        expect("a plan that does not parse", go(p), 1, "does not parse")
+        for empty in ("[]", "false", "0", '""'):
+            p.write_text(f"{named}ref: main\nsource_sha: {new}\npins: {empty}\n")
+            expect(f"pins: {empty} is not a mapping", go(p), 1, "pins is not a mapping")
+        p.write_text(f"{named}ref: main\nsource_sha: {new}\npins:\n")
+        expect("an empty pins is no pins", go(p), 0)
+        j = root / "plan.json"
+        j.write_text(json.dumps({"ref": "main", "x-deps": named, "pins": {
+            "base": {"source_sha": old}, "head": {"source_sha": new}}}).replace(
+            '"source_sha": "' + old, '"source_\\u0073ha": "' + old))  # fmt: skip
+        expect("a JSON plan, its key escaped", go(j), 1, "pins swarm-core aaaaaaa")
         expect("a revision that is an option", go(plan(new, named), rev="--output=x"),
                1, "is not a revision")  # fmt: skip
         p.write_text(f"{named}ref: main\nworkflow: --x.yml\nsource_sha: {new}\n")
@@ -255,7 +323,7 @@ def self_test():
 
     for f in failures:
         print(f"FAIL {f}")
-    print(f"self-test: {'FAIL' if failures else 'ok'} (16 cases)")
+    print(f"self-test: {'FAIL' if failures else 'ok'} (26 cases)")
     return 1 if failures else 0
 
 
