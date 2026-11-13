@@ -357,15 +357,9 @@ FailureDecision Router::onRouteFailure(const DataKey& key, NodeAddress failed,
 }
 
 NodeAddress Router::bestHopExcept(NodeAddress dest, NodeAddress except) const {
-    NodeAddress best = kInvalidAddress;
-    double bestValue = 0.0;
-    for (const auto& e : table_.entries(dest)) {
-        if (e.neighbor != except && e.value > bestValue) {
-            best = e.neighbor;
-            bestValue = e.value;
-        }
-    }
-    return best;
+    // The highest ϕ > 0 but `except`'s, a tie to the lowest neighbour, read in
+    // place (bestEntry, as bestHop).
+    return table_.bestEntry(dest, except).neighbor;
 }
 
 void Router::dropTrail(NodeAddress dest, NodeAddress over) {
