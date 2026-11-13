@@ -146,8 +146,9 @@ public:
     /// True while a discovery for `dest` is waiting for its BANT.
     bool discovering(NodeAddress dest) const { return discoveries_.contains(dest); }
 
-    /// True when data for `dest` with no trail is held, not dropped: with
-    /// bufferDuringDiscovery, while this node's discovery for `dest` runs.
+    /// True when this node's own data for `dest` with no trail is held, not
+    /// dropped (onLocalData's Queue): with bufferDuringDiscovery, while this
+    /// node's discovery for `dest` runs. Transit data is never held.
     bool holds(NodeAddress dest) const {
         return config_.bufferDuringDiscovery && discovering(dest);
     }

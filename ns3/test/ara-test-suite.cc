@@ -28,6 +28,8 @@
 #include "ns3/inet-socket-address.h"
 #include "ns3/internet-stack-helper.h"
 #include "ns3/ipv4-address-helper.h"
+#include "ns3/ipv4-header.h"
+#include "ns3/ipv4.h"
 #include "ns3/mobility-helper.h"
 #include "ns3/simulator.h"
 #include "ns3/socket.h"
@@ -552,6 +554,91 @@ TypeId ProbeProtocol::GetTypeId() {
     return tid;
 }
 
+/// With BufferDuringDiscovery on, a node discovering a destination holds its
+/// own data for it, and still drops at once a transit packet for the same
+/// destination it has no trail for, as the core decides (#112 review): the
+/// held packets stay.
+class BufferTransitTestCase : public TestCase {
+public:
+    BufferTransitTestCase()
+        : TestCase("adapter: buffering holds local data only; transit data with no trail drops") {}
+
+private:
+    void Forward(Ptr<Ipv4Route>, Ptr<const Packet>, const Ipv4Header&) { ++m_forwarded; }
+    void Error(Ptr<const Packet> p, const Ipv4Header&, Socket::SocketErrno) {
+        m_errors.push_back(p->GetUid());
+    }
+
+    void DoRun() override {
+        SwarmCoreSeed(1);
+        NodeContainer nodes;
+        nodes.Create(2);
+        NetDeviceContainer devs = LineOfWifiNodes(nodes);
+        SwarmRoutingHelper probe("ns3::aratest::ProbeProtocol");
+        probe.Set("BufferDuringDiscovery", BooleanValue(true));
+        probe.Install(nodes);
+        Ipv4AddressHelper a;
+        a.SetBase("10.1.0.0", "255.255.255.0");
+        Ipv4InterfaceContainer ifs = a.Assign(devs);
+        probe.AssignStreams(nodes, 0);
+        Ptr<ProbeProtocol> p0 = nodes.Get(0)->GetObject<ProbeProtocol>();
+        Ptr<Ipv4> ip0 = nodes.Get(0)->GetObject<Ipv4>();
+        const Ipv4Address self = ifs.GetAddress(0);
+        const Ipv4Address n1 = ifs.GetAddress(1);
+        const Ipv4Address far("10.1.0.99");  // nobody: the discovery gets no BANT
+        const auto ucb = MakeCallback(&BufferTransitTestCase::Forward, this);
+        const auto ecb = MakeCallback(&BufferTransitTestCase::Error, this);
+
+        uint64_t local = 0;
+        uint64_t transit = 0;
+        Simulator::Schedule(Seconds(0.5), [&]() {
+            // This node's own packet: no trail, so the core starts a discovery
+            // and answers Queue; it comes back through loopback and is held.
+            NS_TEST_EXPECT_MSG_EQ(p0->Select(far, Ipv4Address()), Ipv4Address(), "no trail yet");
+            Ipv4Header h;
+            h.SetSource(self);
+            h.SetDestination(far);
+            h.SetProtocol(6);
+            h.SetTtl(64);
+            Ptr<Packet> mine = Create<Packet>(64);
+            local = mine->GetUid();
+            p0->RouteInput(mine, h, ip0->GetNetDevice(0), ucb, {}, {}, ecb);
+            // A neighbour's packet for the same destination, in transit here.
+            Ipv4Header t = h;
+            t.SetSource(n1);
+            t.SetIdentification(1);
+            Ptr<Packet> theirs = Create<Packet>(64);
+            theirs->AddPacketTag(SwarmPrevHopTag(n1));
+            transit = theirs->GetUid();
+            p0->RouteInput(theirs, t, ip0->GetNetDevice(1), ucb, {}, {}, ecb);
+        });
+        Simulator::Schedule(Seconds(1.0), [&]() {
+            Ptr<DeferredPacketQueue> q = p0->GetDeferredQueue();
+            NS_TEST_EXPECT_MSG_EQ(m_errors.size(), 1u, "one packet dropped");
+            if (!m_errors.empty()) {
+                NS_TEST_EXPECT_MSG_EQ(m_errors[0], transit, "the transit one");
+            }
+            NS_TEST_EXPECT_MSG_EQ(q->Size(), 1u, "this node's own packet is still held");
+            NS_TEST_EXPECT_MSG_EQ(q->Has(far), true, "for the destination it discovers");
+            NS_TEST_EXPECT_MSG_EQ(m_forwarded, 0u, "nothing forwarded");
+        });
+        // The discovery ends with no trail at 0.5 + 2.8 s: the held packet goes.
+        Simulator::Schedule(Seconds(4.0), [&]() {
+            NS_TEST_EXPECT_MSG_EQ(m_errors.size(), 2u, "then the held packet is dropped");
+            if (m_errors.size() == 2) {
+                NS_TEST_EXPECT_MSG_EQ(m_errors[1], local, "this node's own");
+            }
+            NS_TEST_EXPECT_MSG_EQ(p0->GetDeferredQueue()->Size(), 0u, "nothing held");
+        });
+        Simulator::Stop(Seconds(4.5));
+        Simulator::Run();
+        Simulator::Destroy();
+    }
+
+    uint32_t m_forwarded = 0;
+    std::vector<uint64_t> m_errors;
+};
+
 class AdapterGuardsTestCase : public TestCase {
 public:
     AdapterGuardsTestCase()
@@ -635,6 +722,7 @@ public:
         AddTestCase(new BufferTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DeterminismTestCase, TestCase::Duration::QUICK);
         AddTestCase(new ObserverTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new BufferTransitTestCase, TestCase::Duration::QUICK);
         AddTestCase(new AdapterGuardsTestCase, TestCase::Duration::QUICK);
     }
 };

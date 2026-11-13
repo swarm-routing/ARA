@@ -9,6 +9,10 @@
 #include "ns3/boolean.h"
 #include "ns3/log.h"
 
+#include <algorithm>
+#include <utility>
+#include <vector>
+
 namespace ns3 {
 namespace ara {
 
@@ -78,7 +82,7 @@ Ipv4Address RoutingProtocol::NextHop(Ipv4Address dst) {
 }
 
 Ipv4Address RoutingProtocol::SelectNextHop(Ipv4Address dst, Ipv4Address /*src*/, Ipv4Address prev,
-                                           Ptr<const Packet> /*p*/) {
+                                           Ptr<const Packet> p) {
     // A broadcast or multicast address is no core address (255.255.255.255
     // reads as kInvalidAddress): such packets are not routed.
     if (!m_router || dst.IsBroadcast() || dst.IsMulticast()) {
@@ -97,7 +101,14 @@ Ipv4Address RoutingProtocol::SelectNextHop(Ipv4Address dst, Ipv4Address /*src*/,
         return d.action == swarm::core::RouteAction::Unicast ? ToIpv4Address(d.nextHop)
                                                              : Ipv4Address();
     }
-    return ToIpv4Address(m_router->onTransitData(dest).nextHop);
+    const core::AntDecision d = m_router->onTransitData(dest);
+    if (d.action != swarm::core::RouteAction::Unicast) {
+        if (m_buffer && p) {
+            m_transitNoTrail = p->GetUid();  // dropped, never held (StartDiscovery)
+        }
+        return Ipv4Address();
+    }
+    return ToIpv4Address(d.nextHop);
 }
 
 void RoutingProtocol::StartDiscovery(Ipv4Address dst) {
@@ -105,6 +116,7 @@ void RoutingProtocol::StartDiscovery(Ipv4Address dst) {
     // packet the base just deferred is dropped now. A source's discovery was
     // started by onLocalData; a relay starts none (a packet whose link fails
     // backtracks instead, [G02] §3.3: OnDataUndelivered).
+    const std::optional<uint64_t> transit = std::exchange(m_transitNoTrail, std::nullopt);
     if (m_router && m_buffer) {
         // Buffering (#5): held while this node's discovery for dst runs. The
         // loopback hop between RouteOutput and here is an event of its own,
@@ -115,10 +127,35 @@ void RoutingProtocol::StartDiscovery(Ipv4Address dst) {
             return;
         }
         if (m_router->holds(dest)) {
+            if (transit) {
+                // Held: this node's own data for dst. A transit packet the
+                // core dropped goes now, alone.
+                DiscardTransit(dst, *transit);
+            }
             return;
         }
     }
     DiscardDeferred(dst);
+}
+
+void RoutingProtocol::DiscardTransit(Ipv4Address dst, uint64_t uid) {
+    // The queue drops by destination only: take the destination's packets
+    // out, put the transit one back alone and discard it, then put the held
+    // ones back, keeping their first enqueue time (as ReleaseDeferred puts
+    // back what it cannot send).
+    Ptr<DeferredPacketQueue> q = GetDeferredQueue();
+    std::vector<DeferredPacket> held = q->Release(dst);
+    std::vector<DeferredPacket> drop;
+    const auto it = std::find_if(held.begin(), held.end(), [uid](const DeferredPacket& e) {
+        return e.packet->GetUid() == uid;
+    });
+    if (it != held.end()) {
+        drop.push_back(std::move(*it));
+        held.erase(it);
+    }
+    q->Requeue(std::move(drop));
+    q->Discard(dst);
+    q->Requeue(std::move(held));
 }
 
 void RoutingProtocol::ReleaseIfRouted(Ipv4Address dst) {

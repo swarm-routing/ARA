@@ -23,7 +23,10 @@
 //    queue (MaxPackets, MaxAge). An ant or a data packet that lays a trail
 //    toward a destination with held packets releases them
 //    (ReleaseIfRouted); a discovery that ends with no trail sends the core's
-//    DiscardPending, which drops them.
+//    DiscardPending, which drops them. Only this node's own data is held: a
+//    packet in transit with no trail is dropped, as the core decides, even
+//    while this node holds packets for the same destination
+//    (DiscardTransit).
 //  - data in transit: core::Router::nextHop, the highest-pheromone neighbour;
 //    none drops the packet the same way.
 //  - route maintenance by data ([G02] §3.2): every data packet this node
@@ -54,6 +57,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 namespace ara::core {
 class Router;
@@ -106,6 +110,13 @@ private:
     /// With buffering on: sends the packets held for `dst` when the core now
     /// has a trail toward it. Asks the core nothing when none are held.
     void ReleaseIfRouted(Ipv4Address dst);
+    /// With buffering on: the uid of the transit packet SelectNextHop just
+    /// found no trail for. RouteInput defers it and calls StartDiscovery
+    /// before anything else runs, which reads and clears it.
+    std::optional<uint64_t> m_transitNoTrail;
+    /// Drops the deferred packet `uid` to `dst` (Discarded, through its error
+    /// callback) and keeps the others held for `dst`.
+    void DiscardTransit(Ipv4Address dst, uint64_t uid);
     /// Sends a packet as onRouteFailure decided: to another trail, or back to
     /// the previous hop flagged Backtrack; nothing for a Drop.
     void CarryOut(const core::FailureDecision& d, Ptr<const Packet> p, const Ipv4Header& header);
