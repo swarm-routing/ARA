@@ -91,7 +91,10 @@ def plan_source_shas(plan):
     values, problems = [], []
     if "source_sha" in plan:
         values.append(plan["source_sha"])
-    pins = plan.get("pins") or {}
+    pins = plan.get("pins")
+    if pins is None:  # absent, or an empty `pins:`
+        pins = {}
+    # Stricter than ns3-campaign, which reads [], false and 0 as no pins.
     if not isinstance(pins, dict):
         return [], ["pins is not a mapping arm -> {source_sha, image}"]
     for arm, pin in pins.items():
@@ -293,6 +296,11 @@ def self_test():
         expect("a # inside a value is not a comment", go(p), 1, "pins swarm-core aaaaaaa")
         p.write_text(f"{named}ref: main\npins: [unclosed\n")
         expect("a plan that does not parse", go(p), 1, "does not parse")
+        for empty in ("[]", "false", "0", '""'):
+            p.write_text(f"{named}ref: main\nsource_sha: {new}\npins: {empty}\n")
+            expect(f"pins: {empty} is not a mapping", go(p), 1, "pins is not a mapping")
+        p.write_text(f"{named}ref: main\nsource_sha: {new}\npins:\n")
+        expect("an empty pins is no pins", go(p), 0)
         j = root / "plan.json"
         j.write_text(json.dumps({"ref": "main", "x-deps": named, "pins": {
             "base": {"source_sha": old}, "head": {"source_sha": new}}}).replace(
@@ -315,7 +323,7 @@ def self_test():
 
     for f in failures:
         print(f"FAIL {f}")
-    print(f"self-test: {'FAIL' if failures else 'ok'} (21 cases)")
+    print(f"self-test: {'FAIL' if failures else 'ok'} (26 cases)")
     return 1 if failures else 0
 
 
