@@ -7,9 +7,13 @@
 
 #include "ns3/abort.h"
 #include "ns3/boolean.h"
+#include "ns3/double.h"
+#include "ns3/integer.h"
 #include "ns3/log.h"
+#include "ns3/uinteger.h"
 
 #include <algorithm>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -23,6 +27,11 @@ TypeId RoutingProtocol::GetTypeId() {
     // Registered with the TypeId, once, so every way of installing the
     // protocol gets the names (FANT, BANT) in its observer's readers.
     static TypeId tid = [] {
+        // The core's constants (#108): each default is core::Config's, each
+        // value is checked against the range the core assumes. Times are in
+        // seconds, as in the core (docs/fidelity.md "Parameters").
+        const core::Config d{};
+        const double positive = std::numeric_limits<double>::min();
         TypeId t =
             TypeId("ns3::ara::RoutingProtocol")
                 .SetParent<SwarmRoutingBase>()
@@ -32,8 +41,80 @@ TypeId RoutingProtocol::GetTypeId() {
                               "Hold data with no trail while this node's discovery for its "
                               "destination runs (core Config bufferDuringDiscovery; off: "
                               "dropped, as [G02]).",
-                              BooleanValue(false), MakeBooleanAccessor(&RoutingProtocol::m_buffer),
-                              MakeBooleanChecker())
+                              BooleanValue(d.bufferDuringDiscovery),
+                              MakeBooleanAccessor(&RoutingProtocol::m_buffer), MakeBooleanChecker())
+                .AddAttribute("EvaporationRate",
+                              "Evaporation rate q of eq. 2, phi := (1 - q) phi per "
+                              "EvaporationPeriod, in (0, 1] (core Config evaporationRate).",
+                              DoubleValue(d.evaporationRate),
+                              MakeDoubleAccessor(&RoutingProtocol::m_evaporationRate),
+                              MakeDoubleChecker<double>(positive, 1.0))
+                .AddAttribute("EvaporationPeriod",
+                              "The period q applies to, in seconds, > 0; evaluated "
+                              "continuously (core Config evaporationPeriod).",
+                              DoubleValue(d.evaporationPeriod),
+                              MakeDoubleAccessor(&RoutingProtocol::m_evaporationPeriod),
+                              MakeDoubleChecker<double>(positive))
+                .AddAttribute("Deposit",
+                              "Pheromone a data packet adds on every hop, toward both ends, "
+                              "> 0 (core Config deposit).",
+                              DoubleValue(d.deposit),
+                              MakeDoubleAccessor(&RoutingProtocol::m_deposit),
+                              MakeDoubleChecker<double>(positive))
+                .AddAttribute("ExpiryThreshold",
+                              "A trail below this pheromone is gone, >= 0 (core Config "
+                              "expiryThreshold).",
+                              DoubleValue(d.expiryThreshold),
+                              MakeDoubleAccessor(&RoutingProtocol::m_expiryThreshold),
+                              MakeDoubleChecker<double>(0.0))
+                .AddAttribute("AntTtl",
+                              "Maximum hops of a FANT; the BANT carries the same (core Config "
+                              "antTtl).",
+                              UintegerValue(d.antTtl),
+                              MakeUintegerAccessor(&RoutingProtocol::m_antTtl),
+                              MakeUintegerChecker<uint8_t>(1))
+                .AddAttribute("RelayJitterMax",
+                              "A FANT relay waits U[0, this) seconds, >= 0 (core Config "
+                              "relayJitterMax).",
+                              DoubleValue(d.relayJitterMax),
+                              MakeDoubleAccessor(&RoutingProtocol::m_relayJitterMax),
+                              MakeDoubleChecker<double>(0.0))
+                .AddAttribute("DiscoveryTimeout",
+                              "Seconds before a FANT with no BANT is re-sent, doubling per "
+                              "retry, > 0 (core Config discoveryTimeout).",
+                              DoubleValue(d.discoveryTimeout),
+                              MakeDoubleAccessor(&RoutingProtocol::m_discoveryTimeout),
+                              MakeDoubleChecker<double>(positive))
+                .AddAttribute("MaxDiscoveryRetries",
+                              "FANT retries, each only if data for the destination arrived "
+                              "since the last FANT, >= 0 (core Config maxDiscoveryRetries).",
+                              IntegerValue(d.maxDiscoveryRetries),
+                              MakeIntegerAccessor(&RoutingProtocol::m_maxDiscoveryRetries),
+                              MakeIntegerChecker<int32_t>(0))
+                .AddAttribute("HistoryCapacity",
+                              "Entries in each ant and data dedup history, oldest evicted "
+                              "first, >= 1 (core Config historyCapacity).",
+                              UintegerValue(d.historyCapacity),
+                              MakeUintegerAccessor(&RoutingProtocol::m_historyCapacity),
+                              MakeUintegerChecker<uint32_t>(1))
+                .AddAttribute("HistoryLifetime",
+                              "Seconds a dedup history entry lives, > 0 (core Config "
+                              "historyLifetime).",
+                              DoubleValue(d.historyLifetime),
+                              MakeDoubleAccessor(&RoutingProtocol::m_historyLifetime),
+                              MakeDoubleChecker<double>(positive))
+                .AddAttribute("PheromoneCapacity",
+                              "(destination, neighbour) entries the pheromone table holds, "
+                              ">= 1 (core Config pheromoneCapacity).",
+                              UintegerValue(d.pheromoneCapacity),
+                              MakeUintegerAccessor(&RoutingProtocol::m_pheromoneCapacity),
+                              MakeUintegerChecker<uint32_t>(1))
+                .AddAttribute("MaxDiscoveries",
+                              "Destinations a node discovers at once, >= 1 (core Config "
+                              "maxDiscoveries).",
+                              UintegerValue(d.maxDiscoveries),
+                              MakeUintegerAccessor(&RoutingProtocol::m_maxDiscoveries),
+                              MakeUintegerChecker<uint32_t>(1))
                 .AddTraceSource("AntTx", "An ant this node sent (type byte, broadcast).",
                                 MakeTraceSourceAccessor(&RoutingProtocol::m_antTx),
                                 "ns3::ara::RoutingProtocol::AntTxCallback");
@@ -43,17 +124,43 @@ TypeId RoutingProtocol::GetTypeId() {
     return tid;
 }
 
-RoutingProtocol::RoutingProtocol() = default;
+// The attributes' values are set when the object is built through its TypeId
+// (CreateObject, an ObjectFactory); these are the same defaults for any other
+// construction: core::Config's (#108).
+RoutingProtocol::RoutingProtocol()
+    : m_buffer(core::Config{}.bufferDuringDiscovery),
+      m_evaporationRate(core::Config{}.evaporationRate),
+      m_evaporationPeriod(core::Config{}.evaporationPeriod), m_deposit(core::Config{}.deposit),
+      m_expiryThreshold(core::Config{}.expiryThreshold), m_antTtl(core::Config{}.antTtl),
+      m_relayJitterMax(core::Config{}.relayJitterMax),
+      m_discoveryTimeout(core::Config{}.discoveryTimeout),
+      m_maxDiscoveryRetries(core::Config{}.maxDiscoveryRetries),
+      m_historyCapacity(static_cast<uint32_t>(core::Config{}.historyCapacity)),
+      m_historyLifetime(core::Config{}.historyLifetime),
+      m_pheromoneCapacity(static_cast<uint32_t>(core::Config{}.pheromoneCapacity)),
+      m_maxDiscoveries(static_cast<uint32_t>(core::Config{}.maxDiscoveries)) {}
 
 RoutingProtocol::~RoutingProtocol() = default;
 
 void RoutingProtocol::DoInitialize() {
     // The interfaces are up by now (addresses are assigned before the
     // simulation starts), so the node's address is known. The protocol
-    // constants are core::Config's defaults, each sourced in docs/fidelity.md,
-    // and the one switch this adapter exposes (BufferDuringDiscovery).
+    // constants are the attributes' values (#108): core::Config's defaults,
+    // each sourced in docs/fidelity.md, unless a script set them.
     const swarm::core::NodeAddress self = ToNodeAddress(MainAddress());
     core::Config config;
+    config.evaporationRate = m_evaporationRate;
+    config.evaporationPeriod = m_evaporationPeriod;
+    config.deposit = m_deposit;
+    config.expiryThreshold = m_expiryThreshold;
+    config.antTtl = m_antTtl;
+    config.relayJitterMax = m_relayJitterMax;
+    config.discoveryTimeout = m_discoveryTimeout;
+    config.maxDiscoveryRetries = m_maxDiscoveryRetries;
+    config.historyCapacity = m_historyCapacity;
+    config.historyLifetime = m_historyLifetime;
+    config.pheromoneCapacity = m_pheromoneCapacity;
+    config.maxDiscoveries = m_maxDiscoveries;
     config.bufferDuringDiscovery = m_buffer;
     m_router = std::make_unique<core::Router>(
         self, config, m_clock, Rng(), Timers(), [this](const core::AntDecision& d) {

@@ -16,16 +16,21 @@
 // - the router observer: the same seed gives a byte-identical run with its
 //   trace sources connected, and they agree with the counters (ARA#49);
 // - the adapter's guards: no core before the protocol starts, broadcast and
-//   multicast data not routed, a malformed control payload ignored (#41).
+//   multicast data not routed, a malformed control payload ignored (#41);
+// - the core's constants as attributes: their defaults are core::Config{}'s,
+//   and a set value reaches the router (#108).
 // Through the include path (core/, resolved past the contrib link), not
 // "../../core/...": gcov would collapse that beside the link, not its target.
 #include "test/ara-core-tests.h"
 #include "../model/ara-header.h"
+#include "ara-config.h"
 
 #include "ns3/ara-helper.h"
 #include "ns3/ara-routing-protocol.h"
 #include "ns3/boolean.h"
+#include "ns3/double.h"
 #include "ns3/inet-socket-address.h"
+#include "ns3/integer.h"
 #include "ns3/internet-stack-helper.h"
 #include "ns3/ipv4-address-helper.h"
 #include "ns3/ipv4-header.h"
@@ -33,9 +38,11 @@
 #include "ns3/mobility-helper.h"
 #include "ns3/simulator.h"
 #include "ns3/socket.h"
+#include "ns3/string.h"
 #include "ns3/swarm-core-module.h"
 #include "ns3/test.h"
 #include "ns3/udp-socket-factory.h"
+#include "ns3/uinteger.h"
 #include "ns3/wifi-helper.h"
 #include "ns3/yans-wifi-helper.h"
 
@@ -43,6 +50,7 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace ns3;
@@ -259,6 +267,12 @@ struct ChainRun {
 
 class Chain {
 public:
+    /// Sets the protocol attribute `name` to `value` on every node of the next
+    /// Run, as a script would through AraHelper::Set (#108).
+    Chain& With(const std::string& name, const std::string& value) {
+        m_attrs.emplace_back(name, value);
+        return *this;
+    }
     /// `observe` connects the router observer's trace sources, which must not
     /// change the run (org rule 5). `buffer` sets BufferDuringDiscovery;
     /// `extra` runs that much longer after the last packet.
@@ -272,6 +286,9 @@ public:
         AraHelper ara;
         if (buffer) {
             ara.Set("BufferDuringDiscovery", BooleanValue(true));
+        }
+        for (const auto& [name, value] : m_attrs) {
+            ara.Set(name, StringValue(value));
         }
         ara.Install(nodes);
         Ipv4AddressHelper a;
@@ -371,6 +388,7 @@ private:
     ChainRun m_run;
     Ptr<Socket> m_src;
     Ipv4Address m_dst;
+    std::vector<std::pair<std::string, std::string>> m_attrs;
 };
 
 class ChainDeliveryTestCase : public TestCase {
@@ -707,6 +725,71 @@ private:
     std::vector<std::string> m_tx;
 };
 
+/// The core's constants as attributes (#108): every default is core::Config{}'s
+/// to the bit, so the default path hands the router the Config it had before
+/// the attributes existed.
+class AttributeDefaultsTestCase : public TestCase {
+public:
+    AttributeDefaultsTestCase()
+        : TestCase("attributes: every default is core::Config{}'s, to the bit (#108)") {}
+
+private:
+    void DoRun() override {
+        const ::ara::core::Config c{};
+        Ptr<ns3::ara::RoutingProtocol> p = CreateObject<ns3::ara::RoutingProtocol>();
+        const auto real = [&p](const std::string& name) {
+            DoubleValue v;
+            p->GetAttribute(name, v);
+            return v.Get();
+        };
+        const auto natural = [&p](const std::string& name) {
+            UintegerValue v;
+            p->GetAttribute(name, v);
+            return v.Get();
+        };
+        NS_TEST_EXPECT_MSG_EQ(real("EvaporationRate"), c.evaporationRate, "EvaporationRate");
+        NS_TEST_EXPECT_MSG_EQ(real("EvaporationPeriod"), c.evaporationPeriod, "EvaporationPeriod");
+        NS_TEST_EXPECT_MSG_EQ(real("Deposit"), c.deposit, "Deposit");
+        NS_TEST_EXPECT_MSG_EQ(real("ExpiryThreshold"), c.expiryThreshold, "ExpiryThreshold");
+        NS_TEST_EXPECT_MSG_EQ(natural("AntTtl"), uint64_t{c.antTtl}, "AntTtl");
+        NS_TEST_EXPECT_MSG_EQ(real("RelayJitterMax"), c.relayJitterMax, "RelayJitterMax");
+        NS_TEST_EXPECT_MSG_EQ(real("DiscoveryTimeout"), c.discoveryTimeout, "DiscoveryTimeout");
+        IntegerValue retries;
+        p->GetAttribute("MaxDiscoveryRetries", retries);
+        NS_TEST_EXPECT_MSG_EQ(retries.Get(), int64_t{c.maxDiscoveryRetries}, "MaxDiscoveryRetries");
+        NS_TEST_EXPECT_MSG_EQ(natural("HistoryCapacity"), uint64_t{c.historyCapacity},
+                              "HistoryCapacity");
+        NS_TEST_EXPECT_MSG_EQ(real("HistoryLifetime"), c.historyLifetime, "HistoryLifetime");
+        NS_TEST_EXPECT_MSG_EQ(natural("PheromoneCapacity"), uint64_t{c.pheromoneCapacity},
+                              "PheromoneCapacity");
+        NS_TEST_EXPECT_MSG_EQ(natural("MaxDiscoveries"), uint64_t{c.maxDiscoveries},
+                              "MaxDiscoveries");
+        BooleanValue buffer;
+        p->GetAttribute("BufferDuringDiscovery", buffer);
+        NS_TEST_EXPECT_MSG_EQ(buffer.Get(), c.bufferDuringDiscovery, "BufferDuringDiscovery");
+    }
+};
+
+/// A set attribute reaches the router (#108): with AntTtl 2, a FANT from node 0
+/// is relayed once (by node 1, with TTL 1) and node 2 relays it no further, so
+/// node 3, three hops away, never hears it; the default (35) delivers
+/// (ChainDeliveryTestCase).
+class AttributeEffectTestCase : public TestCase {
+public:
+    AttributeEffectTestCase()
+        : TestCase("attributes: AntTtl 2 keeps a 3-hop discovery from the destination (#108)") {}
+
+private:
+    void DoRun() override {
+        const ChainRun r = Chain().With("AntTtl", "2").Run(1, 20);
+        NS_TEST_ASSERT_MSG_EQ(r.sent, 20u, "packets sent");
+        NS_TEST_EXPECT_MSG_GT(r.fants, 0u, "FANTs sent");
+        NS_TEST_EXPECT_MSG_EQ(r.bants, 0u, "no FANT reached the destination, so no BANT");
+        NS_TEST_EXPECT_MSG_EQ(r.received, 0u, "nothing delivered");
+        NS_TEST_EXPECT_MSG_EQ(r.nextHop0, Ipv4Address(), "node 0 has no trail to node 3");
+    }
+};
+
 class AraTestSuite : public TestSuite {
 public:
     AraTestSuite() : TestSuite("ara", Type::UNIT) {
@@ -724,6 +807,8 @@ public:
         AddTestCase(new ObserverTestCase, TestCase::Duration::QUICK);
         AddTestCase(new BufferTransitTestCase, TestCase::Duration::QUICK);
         AddTestCase(new AdapterGuardsTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new AttributeDefaultsTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new AttributeEffectTestCase, TestCase::Duration::QUICK);
     }
 };
 
