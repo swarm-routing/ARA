@@ -26,10 +26,12 @@ module `ara` on
 the org's Phase 3; the three slices of `core/` (route discovery, route
 maintenance by data, duplicate errors with route-failure backtracking) run in
 ns-3 as the module `ara` (header codec, adapter, helper, example,
-`test.py -s ara`, and the `ara` arm of ns3-tools' `routing-compare`). What
-remains is the anchor ([#5](https://github.com/swarm-routing/ARA/issues/5)).
+`test.py -s ara`, and the `ara` arm of ns3-tools' `routing-compare`). The
+anchor ([#5](https://github.com/swarm-routing/ARA/issues/5)) **misses**: ARA's
+routing load is below AODV's, its delivery is not above it, and the written
+infeasibility verdict is [docs/benchmarks/v0.2.0-anchor.md](docs/benchmarks/v0.2.0-anchor.md).
 
-**Release status:** the first release, v0.1.0, comes before the comparator gates (maintainer decision 2026-11-10): it has **not** cleared them (org golden rule 6: fidelity sheet, per-PR delivery smoke, anchor). The anchor is pending, so no number from v0.1.0 counts as a benchmark result. The gated release is proposed as v0.2.0. Releases are cut by [`release.yml`](https://github.com/swarm-routing/ARA/blob/main/.github/workflows/release.yml) and listed under [Releases](https://github.com/swarm-routing/ARA/releases).
+**Release status:** the first release, v0.1.0, comes before the comparator gates (maintainer decision 2026-11-10): it has **not** cleared them (org golden rule 6: fidelity sheet, per-PR delivery smoke, anchor). No number from v0.1.0 counts as a benchmark result. v0.2.0 is the release with the gates run: the anchor missed, and it ships with the written infeasibility verdict ([docs/benchmarks/v0.2.0-anchor.md](docs/benchmarks/v0.2.0-anchor.md)), so ARA's delivery against AODV is not presented as a reproduction of the paper. Releases are cut by [`release.yml`](https://github.com/swarm-routing/ARA/blob/main/.github/workflows/release.yml) and listed under [Releases](https://github.com/swarm-routing/ARA/releases).
 
 How to work here, for people and AI agents alike: [AGENTS.md](AGENTS.md) has
 the rules and how to build and verify; the org conventions are in

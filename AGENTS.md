@@ -7,7 +7,7 @@ before changing anything. Org-wide conventions:
 
 ## What this repo is
 
-**Status: `core/` and `ns3/` in progress (Phase 3, #5).** The core's first slice, route discovery (FANT/BANT, trails, evaporation, next hop, discovery retries, the ant wire header), builds and tests on its own and inside ns-3 as the contrib module `ara`, whose adapter carries it out on swarm-core's `SwarmRoutingBase`; data reinforcement, the router observer, and duplicate errors with route-failure backtracking ([G02] §3.2–3.3) are in, and the adapter carries the last out on swarm-core's `OnDataUndelivered`/`ResendData` (#96, #98). What remains of #5 is the anchor verdict (`anchor-3.yaml`, pre-registered at the swarm-core pin 6966421 and not yet dispatched; it supersedes `anchor.yaml`, #105).
+**Status: `core/` and `ns3/` in progress (Phase 3, #5).** The core's first slice, route discovery (FANT/BANT, trails, evaporation, next hop, discovery retries, the ant wire header), builds and tests on its own and inside ns-3 as the contrib module `ara`, whose adapter carries it out on swarm-core's `SwarmRoutingBase`; data reinforcement, the router observer, and duplicate errors with route-failure backtracking ([G02] §3.2–3.3) are in, and the adapter carries the last out on swarm-core's `OnDataUndelivered`/`ResendData` (#96, #98). The anchor (#5) misses: three pre-registered runs (`anchor.yaml`, `anchor-3.yaml`, `anchor-buffer.yaml`) and the switch's A/B are read in the written infeasibility verdict, `docs/benchmarks/v0.2.0-anchor.md`, with their raw cells in `results/cells/` (maintainer decision 2026-11-13).
 
 ARA, the Ant-Colony-Based Routing Algorithm (Güneş, Sorges & Bouazizi, 2002),
 as a standalone hexagonal protocol: a simulator-agnostic `core/` and an ns-3
@@ -29,13 +29,16 @@ ns3/        contrib module `ara` (GPL-2.0-only), compiling core/ on swarm-core
   helper/ara-bench-arms.cc      the `ara` arm of ns3-tools' routing-bench (compiled only beside it)
   examples/ara-example.cc       a small MANET; CI's determinism program
   test/ara-test-suite.cc        test.py -s ara: the core tests, codec roundtrip + fuzz, delivery, backtracking, determinism
-docs/       fidelity sheet (paper section -> implementation), parameters with sources
+docs/       fidelity sheet (paper section -> implementation), parameters with sources; benchmarks.md and
+            benchmarks/<version>-anchor.md: each pre-registered anchor's verdict (v0.2.0: misses, written infeasibility verdict)
+results/cells/<generation>/   the raw cells of each pre-registered run, as `ns3-campaign collect` wrote them (GPL-2.0-only data);
+                         `ns3-campaign verdicts <plan> --dir results/cells/<generation>` recomputes a page's numbers
 .github/workflows/core.yml   core/ alone: strict warnings, tests, ASan + UBSan, clang-format (check `core`)
 .github/workflows/ns3.yml    ns3/ in ns3-dev latest debug + sanitized (reusable-ns3-ci.yml; checks `ci / ns-latest debug`, `ci / ns-latest sanitized`, `ci / format`), the smoke and the determinism gate
 .github/workflows/swarm-core-pin.yml   the swarm-core pin is one SHA and current (check `swarm-core / pin`)
 .github/workflows/benchmark-cell.yml   one benchmark cell at a pinned source_sha (reusable-benchmark-cell.yml, build mode); dispatched by ns3-campaign
 tools/bench/check_plan_deps.py   a plan's source_sha and named dependency commits against benchmark-cell.yml's, before a dispatch and on collected cells (#105; --self-test)
-tools/bench/campaigns/   campaign plans: smoke.yaml (the change-test smoke against the base), anchor-3.yaml (the paper's trend, ARA vs AODV; the plan to dispatch), anchor.yaml (its first pre-registration: dispatched 2026-11-13 and read on #5, its cells built on swarm-core 360ceef and 501dd7e, not the 0919dbf it names; superseded, kept as the record, #105),
+tools/bench/campaigns/   campaign plans: smoke.yaml (the change-test smoke against the base), anchor-3.yaml (the paper's trend, ARA vs AODV; dispatched 2026-11-13, misses), anchor.yaml (its first pre-registration: dispatched 2026-11-13 and read on #5, its cells built on swarm-core 360ceef and 501dd7e, not the 0919dbf it names; superseded, kept as the record, #105),
                          buffer-ab.yaml (BufferDuringDiscovery off vs on, #5), anchor-buffer.yaml (anchor-3 with the switch on, at 83a1020, #5)
 ```
 
@@ -159,7 +162,11 @@ whose trend, cells, seeds and pass rule it copies. `anchor-buffer.yaml` is
 anchor-3 with BufferDuringDiscovery on, at 83a1020 (71d2166 plus #112, whose
 default path is byte-identical), and `buffer-ab.yaml` the switch's own A/B
 (#5, option 2). A plan `anchor-2` at swarm-core 501dd7e was drafted in
-#113 and dropped before it reached `main`.
+#113 and dropped before it reached `main`. All three anchors miss the PDR
+gates and pass the NRL gate (anchor.yaml's outputs are byte-identical to
+anchor-3's); the written infeasibility verdict is
+`docs/benchmarks/v0.2.0-anchor.md`. A new anchor (the 2003 version, #27) is a
+new plan, never an edit of these.
 
 ## Golden rules (invariants — do not break)
 

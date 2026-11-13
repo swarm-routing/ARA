@@ -10,6 +10,7 @@
 | `tools/` | standalone scripts (checks, release, data handling) | `MIT OR GPL-2.0-only` |
 | `ns3/` | the `ara` ns-3 contrib module | `GPL-2.0-only` |
 | `docs/`, `README.md`, `AGENTS.md`, `CLAUDE.md` | docs | `GPL-2.0-only` |
+| `results/` | benchmark data: the raw cells of each pre-registered run (`results/cells/<generation>/`) | `GPL-2.0-only` |
 | everything else | | `GPL-2.0-only` |
 
 Texts: [`LICENSE`](LICENSE) (GPL-2.0) and [`LICENSE-MIT`](LICENSE-MIT) (the
