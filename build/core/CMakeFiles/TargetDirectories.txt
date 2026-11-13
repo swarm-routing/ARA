@@ -1,6 +1,0 @@
-/tmp/claude-0/-home-user/844ef203-bb92-5474-822f-3dad885c668a/scratchpad/pin43/ARA/build/core/CMakeFiles/swarm_core_primitives.dir
-/tmp/claude-0/-home-user/844ef203-bb92-5474-822f-3dad885c668a/scratchpad/pin43/ARA/build/core/CMakeFiles/ara_core.dir
-/tmp/claude-0/-home-user/844ef203-bb92-5474-822f-3dad885c668a/scratchpad/pin43/ARA/build/core/CMakeFiles/ara_core_tests.dir
-/tmp/claude-0/-home-user/844ef203-bb92-5474-822f-3dad885c668a/scratchpad/pin43/ARA/build/core/CMakeFiles/test.dir
-/tmp/claude-0/-home-user/844ef203-bb92-5474-822f-3dad885c668a/scratchpad/pin43/ARA/build/core/CMakeFiles/edit_cache.dir
-/tmp/claude-0/-home-user/844ef203-bb92-5474-822f-3dad885c668a/scratchpad/pin43/ARA/build/core/CMakeFiles/rebuild_cache.dir
