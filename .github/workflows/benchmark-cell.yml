@@ -66,5 +66,5 @@ jobs:
       cell: ${{ inputs.cell }}
       modules: ara=ns3
       dependencies: |
-        swarm-core=swarm-routing/ns3-swarm-core@0919dbfe4a48495a2eda32335a1be6fae453c87c
+        swarm-core=swarm-routing/ns3-swarm-core@501dd7eca8c530dadaeb5d43c66e9c31d19fd8f5
         routing-bench=swarm-routing/ns3-tools@3d279b83392a00288050574cee4288f30205658b:ns3/routing-bench
