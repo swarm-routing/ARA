@@ -35,7 +35,7 @@ workflow: benchmark-cell.yml
 program: routing-compare
 # ns3-dev:latest-optimized (= 3.49-optimized) on 2026-11-13. ARA alone runs
 # on 3.49; the AODV livelock that keeps the anchor on 3.48
-# (ns3-containers#35) does not concern this plan.
+# (swarm-routing/ns3-containers#35) does not concern this plan.
 image: ghcr.io/swarm-routing/ns3-dev@sha256:b185a97c1b13ca531c65af253c7238e8ef3a1cc73ab8c71057e431454a7295e5
 pins:
   base: {source_sha: 94662a68ed85c9589afcd09b80b1655d72118766}
