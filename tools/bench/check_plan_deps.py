@@ -32,17 +32,20 @@ revision with --rev, e.g. HEAD) and fails unless:
   3. with --cells: every ##PROV## line of every DIR/*.txt names those commits
      in `modules=`.
 
-The last line is the verdict (`plan deps: ok` or `plan deps: FAIL (n)`); the
-exit status is 0 or 1. Standard library, plus PyYAML for a .yaml/.yml plan
-(as ns3-campaign; without it such a plan fails, it is never read by pattern);
-it needs `git` and the plan's commits in the local repository (`git fetch
-origin` first).
+PLAN and DIR are paths inside this repository (relative to its root, or
+absolute; tools/bench/campaigns/, .campaign/, results/cells/); any other is
+refused, never read (#126). The last line is the verdict (`plan deps: ok` or
+`plan deps: FAIL (n)`); the exit status is 0 or 1. Standard library, plus
+PyYAML for a .yaml/.yml plan (as ns3-campaign; without it such a plan fails,
+it is never read by pattern); it needs `git` and the plan's commits in the
+local repository (`git fetch origin` first).
 
     python3 -I tools/bench/check_plan_deps.py --self-test
 """
 
 import argparse
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -50,9 +53,19 @@ import sys
 import tempfile
 import tomllib
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(os.path.dirname(HERE))
 SHA = r"[0-9a-f]{40}"
 DEP_LINE = re.compile(rf"^\s+([a-z0-9][a-z0-9-]*)=[\w.-]+/[\w.-]+@({SHA})(?::\S+)?\s*$", re.M)
 PIN = re.compile(rf'set\(SWARM_CORE_REF\s+"({SHA})"')
+
+
+def inside(root, path):
+    """`path`'s real path if it lies inside `root` (relative paths are taken from
+    `root`), else None: an argument cannot make the script read a file elsewhere."""
+    base = os.path.realpath(root)
+    real = os.path.realpath(os.path.join(base, path))
+    return real if real.startswith(base + os.sep) else None
 
 
 def git(root, *args):
@@ -126,6 +139,11 @@ def check(root, plan_path, rev=None, cells=None, out=print):
         fails += 1
         out(f"FAIL {msg}")
 
+    real = inside(root, plan_path)
+    if real is None or not os.path.isfile(real):
+        fail(f"{plan_path}: not a plan file inside {os.path.realpath(root)}")
+        return fails
+    plan_path = real
     text = pathlib.Path(plan_path).read_text(encoding="utf-8")
     plan, why = load_plan(plan_path)
     if plan is None:
@@ -181,7 +199,15 @@ def check(root, plan_path, rev=None, cells=None, out=print):
             out(f"ok   the plan names {name}@{named[0]}, as the workflow")
 
     if cells is not None:
-        files = sorted(pathlib.Path(cells).glob("*.txt"))
+        real = inside(root, cells)
+        if real is None or not os.path.isdir(real):
+            fail(f"{cells}: not a directory inside {os.path.realpath(root)}")
+            return fails
+        files = sorted(pathlib.Path(real).glob("*.txt"))
+        outside = [f for f in files if inside(root, f) is None]
+        for f in outside:
+            fail(f"{f.name}: links outside {os.path.realpath(root)}, not read")
+        files = [f for f in files if f not in outside]
         lines = 0
         bad = 0
         for f in files:
@@ -320,10 +346,26 @@ def self_test():
         expect("a cell on another swarm-core", go(plan(new, named), cells=cells), 1, "two.txt")
         (cells / "two.txt").write_text("##RUN## x\n")
         expect("a cell with no ##PROV##", go(plan(new, named), cells=cells), 1, "no ##PROV##")
+        (cells / "two.txt").unlink()
+        # #126: a plan or a cell directory outside the repository is refused, never read.
+        with tempfile.TemporaryDirectory() as away:
+            far = pathlib.Path(away)
+            (far / "plan.yaml").write_text(named + f"ref: main\nsource_sha: {new}\n")
+            (far / "x.txt").write_text(prov.format(new, b, rb))
+            expect(
+                "a plan outside the repository", go(far / "plan.yaml"), 1, "not a plan file inside"
+            )
+            expect("a plan that climbs out", go(pathlib.Path("..") / far.name / "plan.yaml"),
+                   1, "not a plan file inside")  # fmt: skip
+            expect("cells outside the repository", go(plan(new, named), cells=far),
+                   1, "not a directory inside")  # fmt: skip
+            (cells / "far.txt").symlink_to(far / "x.txt")
+            expect("a cell that links outside", go(plan(new, named), cells=cells),
+                   1, "links outside")  # fmt: skip
 
     for f in failures:
         print(f"FAIL {f}")
-    print(f"self-test: {'FAIL' if failures else 'ok'} (26 cases)")
+    print(f"self-test: {'FAIL' if failures else 'ok'} (30 cases)")
     return 1 if failures else 0
 
 
@@ -340,10 +382,7 @@ def main():
         return self_test()
     if not args.plan:
         ap.error("a plan is required")
-    top = git(pathlib.Path(args.plan).resolve().parent, "rev-parse", "--show-toplevel")
-    if top is None:
-        sys.exit(f"{args.plan} is not inside a git repository")
-    fails = check(top.strip(), args.plan, rev=args.rev, cells=args.cells)
+    fails = check(REPO, args.plan, rev=args.rev, cells=args.cells)
     print(f"plan deps: FAIL ({fails})" if fails else "plan deps: ok")
     return 1 if fails else 0
 
