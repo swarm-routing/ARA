@@ -26,6 +26,8 @@ ns3/        (planned) contrib module `ara` (GPL-2.0-only): header codec, adapter
 docs/       fidelity sheet (paper section -> implementation), parameters with sources
 .github/workflows/core.yml   core/ alone: strict warnings, tests, ASan + UBSan, clang-format (check `core`)
 .github/workflows/swarm-core-pin.yml   the swarm-core pin is one SHA and current (check `swarm-core / pin`)
+.github/workflows/benchmark-cell.yml   one benchmark cell at a pinned source_sha (reusable-benchmark-cell.yml, build mode); dispatched by ns3-campaign
+tools/bench/campaigns/   campaign plans: smoke.yaml (the change-test smoke against the base)
 ```
 
 ## Build & verify
@@ -74,6 +76,33 @@ swarm-core=swarm-routing/ns3-swarm-core@main` and
 `routing-compare --scenario=paper --nNodes=20 --time=30 --runs=1
 --protocols=ara` as the smoke and `ara-example --seed={seed}` as the
 determinism program.
+
+Benchmarks (#36, swarm-routing/.github#156): change tests and the anchor
+run here, released versions in swarm-routing/benchmarks (its ADR-0002).
+`.github/workflows/benchmark-cell.yml` is a thin caller of
+swarm-routing/.github's `reusable-benchmark-cell.yml` in build mode: each cell
+checks out its `source_sha`, builds `ara` with swarm-core at
+`SWARM_CORE_REF` and routing-bench at a pinned ns3-tools commit on the ns3-dev
+image given by digest, and runs `routing-compare`. Campaign plans live in
+`tools/bench/campaigns/` and run through `ns3-campaign` (swarm-routing/ns3-tools
+`python/ns3_tool/change_plan.py`; its docstring is the plan format).
+`smoke.yaml` is the change-test smoke: ARA at a PR's head against its base,
+two families (`grid-rwp`, `static-mesh`), 20 paired seeds. For a PR that
+changes `core/` or `ns3/`, copy it with a new `generation` and the PR's base
+and head commits in `pins`, then:
+
+```bash
+C="python3 ../ns3-tools/python/ns3_tool/campaign.py"   # or ns3-campaign (pip install ../ns3-tools/python)
+$C plan P.yaml                                        # every job; dispatches nothing
+$C dispatch P.yaml --cap 4                            # resumable: re-run until every label is logged
+$C status P.yaml --brief                              # poll lightly (15 min)
+$C collect P.yaml --out .campaign/<generation>/cells  # rejects a cell whose ##PROV## is not its pin
+$C verdicts P.yaml --dir .campaign/<generation>/cells # head minus base, paired 95 % CI per cell
+```
+
+and put the `verdicts` lines in the PR (no hand numbers, ns3-tools rule 13).
+State lives in `.campaign/<generation>/` (git-ignored); a cell's artifact is
+kept 7 days.
 
 ## Golden rules (invariants — do not break)
 
