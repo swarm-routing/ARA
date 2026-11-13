@@ -225,12 +225,14 @@ AntDecision Router::onLocalData(NodeAddress dest) {
     if (hop != kInvalidAddress) {
         return decided({swarm::core::RouteAction::Unicast, hop, std::nullopt}, dest);
     }
-    // Fidelity "Data packets waiting for a route": no buffering, dropped.
     if (auto it = discoveries_.find(dest); it != discoveries_.end()) {
         it->second.demand = true;  // #5: the source keeps sending
     } else {
         startDiscovery(dest);
     }
+    // Fidelity "Data packets waiting for a route": dropped, or held while the
+    // discovery runs when bufferDuringDiscovery is on (#5).
+    if (holds(dest)) return decided(AntDecision::queue(dest), dest);
     return decided(AntDecision::drop(), dest);
 }
 
@@ -331,8 +333,11 @@ void Router::onTimeout(NodeAddress dest, std::uint32_t sequence) {
     if (it == discoveries_.end() || it->second.sequence != sequence) return;  // answered or stale
     age();
     Discovery& d = it->second;
-    if (bestHop(dest) != kInvalidAddress || !d.demand || d.retries >= config_.maxDiscoveryRetries) {
+    const bool routed = bestHop(dest) != kInvalidAddress;
+    if (routed || !d.demand || d.retries >= config_.maxDiscoveryRetries) {
         discoveries_.erase(it);
+        // Ended with no trail: the data held for it goes too.
+        if (!routed && config_.bufferDuringDiscovery) emit(AntDecision::discardPending(dest));
         return;
     }
     const int retries = ++d.retries;

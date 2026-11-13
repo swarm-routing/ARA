@@ -23,6 +23,8 @@ void TestEvaporation(Checker& c);
 void TestNextHopChoice(Checker& c);
 void TestRetryOnlyWithDemand(Checker& c);
 void TestRetryLimitAndDoubling(Checker& c);
+void TestBufferHoldsDuringDiscovery(Checker& c);
+void TestBufferGivesUpWithTheDiscovery(Checker& c);
 void TestHistoryCap(Checker& c);
 void TestHistoryLifetime(Checker& c);
 void TestDiscoveryOnALine(Checker& c);

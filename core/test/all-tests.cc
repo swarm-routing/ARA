@@ -10,7 +10,7 @@ namespace ara::core::test {
 
 namespace {
 
-constexpr std::array<NamedTest, 24> kTests{{
+constexpr std::array<NamedTest, 26> kTests{{
     {"ant codec: roundtrip", TestAntRoundtrip},
     {"ant codec: the decoder fails closed", TestAntDecoderFailsClosed},
     {"ant codec: seeded fuzz", TestAntFuzz},
@@ -22,6 +22,10 @@ constexpr std::array<NamedTest, 24> kTests{{
     {"next hop: highest pheromone, ties to the lowest address", TestNextHopChoice},
     {"discovery: a retry only while the source keeps sending", TestRetryOnlyWithDemand},
     {"discovery: timeout doubles, at most 2 retries", TestRetryLimitAndDoubling},
+    {"buffering (switch): held while the discovery runs, off by default",
+     TestBufferHoldsDuringDiscovery},
+    {"buffering (switch): the held data goes with a discovery that ends with no trail",
+     TestBufferGivesUpWithTheDiscovery},
     {"history: 64-entry cap, oldest evicted first", TestHistoryCap},
     {"history: entries expire 30 s after they are recorded", TestHistoryLifetime},
     {"discovery end to end on a line and a diamond", TestDiscoveryOnALine},

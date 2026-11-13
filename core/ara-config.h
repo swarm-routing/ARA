@@ -55,6 +55,14 @@ struct Config {
     /// Fidelity "Concurrent discoveries per node": 64, repo choice under
     /// org rule 7.
     std::size_t maxDiscoveries = 64;
+    /// Fidelity "Data packets waiting for a route": off, as [G02] (#4; buffering
+    /// is ARA2's). On (a repo switch for the anchor's A/B, maintainer decision
+    /// 2026-11-13 on #5), a source holds the data it has no trail for while its
+    /// discovery for the destination runs (onLocalData answers Queue), and the
+    /// held packets go with a discovery that ends with no trail (a
+    /// DiscardPending through the sink). The adapter's queue bounds them (org
+    /// rule 7).
+    bool bufferDuringDiscovery = false;
 };
 
 }  // namespace ara::core

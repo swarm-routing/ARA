@@ -24,9 +24,12 @@
 
 #include "ns3/ara-helper.h"
 #include "ns3/ara-routing-protocol.h"
+#include "ns3/boolean.h"
 #include "ns3/inet-socket-address.h"
 #include "ns3/internet-stack-helper.h"
 #include "ns3/ipv4-address-helper.h"
+#include "ns3/ipv4-header.h"
+#include "ns3/ipv4.h"
 #include "ns3/mobility-helper.h"
 #include "ns3/simulator.h"
 #include "ns3/socket.h"
@@ -257,14 +260,19 @@ struct ChainRun {
 class Chain {
 public:
     /// `observe` connects the router observer's trace sources, which must not
-    /// change the run (org rule 5).
-    ChainRun Run(uint32_t seed, uint32_t packets, bool observe = false, double moveAt = 0.0) {
+    /// change the run (org rule 5). `buffer` sets BufferDuringDiscovery;
+    /// `extra` runs that much longer after the last packet.
+    ChainRun Run(uint32_t seed, uint32_t packets, bool observe = false, double moveAt = 0.0,
+                 bool buffer = false, double extra = 0.0) {
         SwarmCoreSeed(seed);
         NodeContainer nodes;
         nodes.Create(4);
         NetDeviceContainer devs = LineOfWifiNodes(nodes);
 
         AraHelper ara;
+        if (buffer) {
+            ara.Set("BufferDuringDiscovery", BooleanValue(true));
+        }
         ara.Install(nodes);
         Ipv4AddressHelper a;
         a.SetBase("10.1.0.0", "255.255.255.0");
@@ -305,7 +313,7 @@ public:
                 dst->GetObject<MobilityModel>()->SetPosition(Vector(5000.0, 0.0, 0.0));
             });
         }
-        Simulator::Stop(Seconds(2.0 + 0.5 * packets));
+        Simulator::Stop(Seconds(2.0 + 0.5 * packets + extra));
         Simulator::Run();
         m_run.nextHop0 = Proto(nodes.Get(0))->NextHop(m_dst);
         m_run.nextHop1 = Proto(nodes.Get(1))->NextHop(m_dst);
@@ -403,6 +411,33 @@ private:
         NS_TEST_EXPECT_MSG_EQ(r.queue0.enqueued, 1u, "only the first packet found no trail");
         NS_TEST_EXPECT_MSG_EQ(r.nextHop0, r.expect0, "node 0 still routes over node 1");
         NS_TEST_EXPECT_MSG_EQ(r.nextHop1, r.expect1, "node 1 still routes over node 2");
+    }
+};
+
+/// The BufferDuringDiscovery switch (#5): the packet that starts the
+/// discovery is held and sent when the BANT lays the trail; with no answer,
+/// the held packets go when the discovery ends. Off, ChainDeliveryTestCase.
+class BufferTestCase : public TestCase {
+public:
+    BufferTestCase()
+        : TestCase("adapter: BufferDuringDiscovery holds data while the discovery runs (#5)") {}
+
+private:
+    void DoRun() override {
+        const ChainRun r = Chain().Run(1, 20, false, 0.0, true);
+        NS_TEST_EXPECT_MSG_EQ(r.received, 20u, "every packet delivered, the first one too");
+        NS_TEST_EXPECT_MSG_EQ(r.queue0.enqueued, 1u, "the first packet found no trail");
+        NS_TEST_EXPECT_MSG_EQ(r.queue0.released, 1u, "held, then sent when the BANT came back");
+        NS_TEST_EXPECT_MSG_EQ(r.queue0.discarded, 0u, "nothing dropped");
+        NS_TEST_EXPECT_MSG_EQ(r.nextHop0, r.expect0, "node 0 routes to node 3 over node 1");
+
+        // The destination is gone before the first packet: no BANT. One
+        // packet, so no retry: the discovery ends at 1 + 2.8 s with no trail.
+        const ChainRun g = Chain().Run(1, 1, false, 0.5, true, 5.0);
+        NS_TEST_EXPECT_MSG_EQ(g.received, 0u, "nothing to deliver to");
+        NS_TEST_EXPECT_MSG_EQ(g.queue0.enqueued, 1u, "held while the discovery ran");
+        NS_TEST_EXPECT_MSG_EQ(g.queue0.discarded, 1u, "dropped when it ended with no trail");
+        NS_TEST_EXPECT_MSG_EQ(g.queue0.released, 0u, "never sent");
     }
 };
 
@@ -519,6 +554,91 @@ TypeId ProbeProtocol::GetTypeId() {
     return tid;
 }
 
+/// With BufferDuringDiscovery on, a node discovering a destination holds its
+/// own data for it, and still drops at once a transit packet for the same
+/// destination it has no trail for, as the core decides (#112 review): the
+/// held packets stay.
+class BufferTransitTestCase : public TestCase {
+public:
+    BufferTransitTestCase()
+        : TestCase("adapter: buffering holds local data only; transit data with no trail drops") {}
+
+private:
+    void Forward(Ptr<Ipv4Route>, Ptr<const Packet>, const Ipv4Header&) { ++m_forwarded; }
+    void Error(Ptr<const Packet> p, const Ipv4Header&, Socket::SocketErrno) {
+        m_errors.push_back(p->GetUid());
+    }
+
+    void DoRun() override {
+        SwarmCoreSeed(1);
+        NodeContainer nodes;
+        nodes.Create(2);
+        NetDeviceContainer devs = LineOfWifiNodes(nodes);
+        SwarmRoutingHelper probe("ns3::aratest::ProbeProtocol");
+        probe.Set("BufferDuringDiscovery", BooleanValue(true));
+        probe.Install(nodes);
+        Ipv4AddressHelper a;
+        a.SetBase("10.1.0.0", "255.255.255.0");
+        Ipv4InterfaceContainer ifs = a.Assign(devs);
+        probe.AssignStreams(nodes, 0);
+        Ptr<ProbeProtocol> p0 = nodes.Get(0)->GetObject<ProbeProtocol>();
+        Ptr<Ipv4> ip0 = nodes.Get(0)->GetObject<Ipv4>();
+        const Ipv4Address self = ifs.GetAddress(0);
+        const Ipv4Address n1 = ifs.GetAddress(1);
+        const Ipv4Address far("10.1.0.99");  // nobody: the discovery gets no BANT
+        const auto ucb = MakeCallback(&BufferTransitTestCase::Forward, this);
+        const auto ecb = MakeCallback(&BufferTransitTestCase::Error, this);
+
+        uint64_t local = 0;
+        uint64_t transit = 0;
+        Simulator::Schedule(Seconds(0.5), [&]() {
+            // This node's own packet: no trail, so the core starts a discovery
+            // and answers Queue; it comes back through loopback and is held.
+            NS_TEST_EXPECT_MSG_EQ(p0->Select(far, Ipv4Address()), Ipv4Address(), "no trail yet");
+            Ipv4Header h;
+            h.SetSource(self);
+            h.SetDestination(far);
+            h.SetProtocol(6);
+            h.SetTtl(64);
+            Ptr<Packet> mine = Create<Packet>(64);
+            local = mine->GetUid();
+            p0->RouteInput(mine, h, ip0->GetNetDevice(0), ucb, {}, {}, ecb);
+            // A neighbour's packet for the same destination, in transit here.
+            Ipv4Header t = h;
+            t.SetSource(n1);
+            t.SetIdentification(1);
+            Ptr<Packet> theirs = Create<Packet>(64);
+            theirs->AddPacketTag(SwarmPrevHopTag(n1));
+            transit = theirs->GetUid();
+            p0->RouteInput(theirs, t, ip0->GetNetDevice(1), ucb, {}, {}, ecb);
+        });
+        Simulator::Schedule(Seconds(1.0), [&]() {
+            Ptr<DeferredPacketQueue> q = p0->GetDeferredQueue();
+            NS_TEST_EXPECT_MSG_EQ(m_errors.size(), 1u, "one packet dropped");
+            if (!m_errors.empty()) {
+                NS_TEST_EXPECT_MSG_EQ(m_errors[0], transit, "the transit one");
+            }
+            NS_TEST_EXPECT_MSG_EQ(q->Size(), 1u, "this node's own packet is still held");
+            NS_TEST_EXPECT_MSG_EQ(q->Has(far), true, "for the destination it discovers");
+            NS_TEST_EXPECT_MSG_EQ(m_forwarded, 0u, "nothing forwarded");
+        });
+        // The discovery ends with no trail at 0.5 + 2.8 s: the held packet goes.
+        Simulator::Schedule(Seconds(4.0), [&]() {
+            NS_TEST_EXPECT_MSG_EQ(m_errors.size(), 2u, "then the held packet is dropped");
+            if (m_errors.size() == 2) {
+                NS_TEST_EXPECT_MSG_EQ(m_errors[1], local, "this node's own");
+            }
+            NS_TEST_EXPECT_MSG_EQ(p0->GetDeferredQueue()->Size(), 0u, "nothing held");
+        });
+        Simulator::Stop(Seconds(4.5));
+        Simulator::Run();
+        Simulator::Destroy();
+    }
+
+    uint32_t m_forwarded = 0;
+    std::vector<uint64_t> m_errors;
+};
+
 class AdapterGuardsTestCase : public TestCase {
 public:
     AdapterGuardsTestCase()
@@ -599,8 +719,10 @@ public:
         AddTestCase(new ChainDeliveryTestCase, TestCase::Duration::QUICK);
         AddTestCase(new MaintenanceTestCase, TestCase::Duration::QUICK);
         AddTestCase(new BacktrackTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new BufferTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DeterminismTestCase, TestCase::Duration::QUICK);
         AddTestCase(new ObserverTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new BufferTransitTestCase, TestCase::Duration::QUICK);
         AddTestCase(new AdapterGuardsTestCase, TestCase::Duration::QUICK);
     }
 };
