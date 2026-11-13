@@ -24,11 +24,11 @@ core/       simulator-agnostic algorithm + unit tests (no ns-3 headers; MIT OR G
   test/           the core tests (plain CMake + ctest; the ns-3 suite runs the same list)
 ns3/        contrib module `ara` (GPL-2.0-only), compiling core/ on swarm-core
   model/ara-header.*            AntHeader (core/'s ant codec as an ns3::Header) and DataFlagTag (a data packet's duplicate-error or backtrack flag)
-  model/ara-routing-protocol.*  the adapter: one core::Router per node on SwarmRoutingBase; converts and carries out, no constant of its own
+  model/ara-routing-protocol.*  the adapter: one core::Router per node on SwarmRoutingBase; converts and carries out, no constant of its own; core::Config's fields as attributes, with its defaults (#108)
   helper/ara-helper.*           AraHelper (stack + protocol)
   helper/ara-bench-arms.cc      the `ara` arm of ns3-tools' routing-bench (compiled only beside it)
   examples/ara-example.cc       a small MANET; CI's determinism program
-  test/ara-test-suite.cc        test.py -s ara: the core tests, codec roundtrip + fuzz, delivery, backtracking, determinism
+  test/ara-test-suite.cc        test.py -s ara: the core tests, codec roundtrip + fuzz, delivery, backtracking, determinism, the attributes
 docs/       fidelity sheet (paper section -> implementation), parameters with sources; benchmarks.md and
             benchmarks/<version>-anchor.md: each pre-registered anchor's verdict (v0.2.0: misses, written infeasibility verdict)
 results/cells/<generation>/   the raw cells of each pre-registered run, as `ns3-campaign collect` wrote them (GPL-2.0-only data);

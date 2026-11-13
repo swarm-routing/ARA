@@ -106,7 +106,24 @@ private:
     SwarmClock m_clock;
     std::unique_ptr<core::Router> m_router;
     /// The BufferDuringDiscovery attribute: core Config bufferDuringDiscovery.
-    bool m_buffer = false;
+    bool m_buffer;
+    /// The core's constants (core/ara-config.h), one attribute each (#108),
+    /// copied into the router's Config by DoInitialize. Their defaults are
+    /// core::Config's, read in GetTypeId and in the constructor, never typed
+    /// here; times are doubles in seconds, as in the core, so the default
+    /// path hands the router core::Config{} to the bit.
+    double m_evaporationRate;
+    double m_evaporationPeriod;
+    double m_deposit;
+    double m_expiryThreshold;
+    uint8_t m_antTtl;
+    double m_relayJitterMax;
+    double m_discoveryTimeout;
+    int32_t m_maxDiscoveryRetries;
+    uint32_t m_historyCapacity;
+    double m_historyLifetime;
+    uint32_t m_pheromoneCapacity;
+    uint32_t m_maxDiscoveries;
     /// With buffering on: sends the packets held for `dst` when the core now
     /// has a trail toward it. Asks the core nothing when none are held.
     void ReleaseIfRouted(Ipv4Address dst);
