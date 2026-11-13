@@ -44,6 +44,11 @@ struct Config {
     /// evicted first (#5). The same cap bounds the BANT's reverse pointers,
     /// which are recorded with the FANT history entries.
     std::size_t historyCapacity = 64;
+    /// The same row: an entry also expires 30 s after it is recorded (#4),
+    /// in the four histories alike (FANT, BANT, reverse pointers, data). The
+    /// age is read against the clock when a history is read or written; there
+    /// is no purge timer.
+    Time historyLifetime = 30.0;
     /// Fidelity "Pheromone table capacity": 4096 (destination, neighbour)
     /// entries, repo choice under org rule 7.
     std::size_t pheromoneCapacity = 4096;

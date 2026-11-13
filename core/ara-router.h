@@ -110,7 +110,8 @@ public:
     /// originates it). False when the key was seen before: a loop ([G02]
     /// §3.2), and the packet goes back to `prev` with DUPLICATE_ERROR. The
     /// first sighting records `prev` for backtracking, in a history bounded by
-    /// historyCapacity (fidelity "Ant and data dedup history size", #5). A
+    /// historyCapacity whose entries expire after historyLifetime (fidelity
+    /// "Ant and data dedup history size", #4, #5). A
     /// packet that comes back flagged Backtrack is no duplicate: do not call
     /// this for it, call onRouteFailure.
     bool admitData(const DataKey& key, NodeAddress prev);
@@ -161,38 +162,50 @@ private:
         bool demand = false;  ///< data for the destination arrived since that FANT
     };
 
+    /// A hop kept in a history, with the time it was recorded.
+    struct TimedHop {
+        NodeAddress hop;
+        Time at;
+    };
+
     /// (FANT source, sequence) -> the neighbour the FANT came from: the path
     /// the BANT is unicast back along (fidelity "How the BANT travels back").
     /// Recorded with the FANT history and bounded by the same cap, oldest
-    /// evicted first (org rule 7).
+    /// evicted first (org rule 7), with the same lifetime: an entry recorded
+    /// at t reads as absent from t + lifetime on.
     class ReversePointers {
     public:
-        explicit ReversePointers(std::size_t capacity);
-        void record(NodeAddress source, std::uint32_t sequence, NodeAddress previousHop);
-        NodeAddress find(NodeAddress source, std::uint32_t sequence) const;
+        ReversePointers(std::size_t capacity, Time lifetime);
+        void record(NodeAddress source, std::uint32_t sequence, NodeAddress previousHop, Time now);
+        NodeAddress find(NodeAddress source, std::uint32_t sequence, Time now) const;
         std::size_t size() const { return hops_.size(); }
 
     private:
         using Key = std::pair<NodeAddress, std::uint32_t>;
         std::size_t capacity_;
-        std::map<Key, NodeAddress> hops_;
+        Time lifetime_;
+        std::map<Key, TimedHop> hops_;
         std::deque<Key> order_;
     };
 
     /// DataKey -> the hop the packet came from, kept for backtracking; the
-    /// data dedup history, bounded by historyCapacity, oldest evicted first.
+    /// data dedup history, bounded by historyCapacity, oldest evicted first,
+    /// each entry expired from its record time + lifetime on.
     class DataHistory {
     public:
-        explicit DataHistory(std::size_t capacity);
-        /// False when `key` is already there (its first hop is kept).
-        bool record(const DataKey& key, NodeAddress previousHop);
-        /// The hop `key` came from; kInvalidAddress when unknown or originated here.
-        NodeAddress find(const DataKey& key) const;
+        DataHistory(std::size_t capacity, Time lifetime);
+        /// False when `key` is already there and not expired at `now` (its
+        /// first hop is kept); an expired entry is recorded afresh.
+        bool record(const DataKey& key, NodeAddress previousHop, Time now);
+        /// The hop `key` came from; kInvalidAddress when unknown, expired at
+        /// `now` or originated here.
+        NodeAddress find(const DataKey& key, Time now) const;
         std::size_t size() const { return hops_.size(); }
 
     private:
         std::size_t capacity_;
-        std::map<DataKey, NodeAddress> hops_;
+        Time lifetime_;
+        std::map<DataKey, TimedHop> hops_;
         std::deque<DataKey> order_;
     };
     void age();

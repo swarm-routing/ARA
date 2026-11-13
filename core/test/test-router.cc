@@ -209,4 +209,45 @@ void TestHistoryCap(Checker& c) {
     c.check(s.out.size() == 2 && !s.router.discovering(9), "at most maxDiscoveries at once");
 }
 
+// Fidelity "Ant and data dedup history size": an entry expires 30 s after it
+// is recorded (#4), read against the clock on access. Far fewer than 64
+// entries are recorded here, so the count cap never evicts.
+void TestHistoryLifetime(Checker& c) {
+    Config cfg;
+    c.check(cfg.historyLifetime == 30.0, "the decided lifetime is 30 s (#4)");
+    Harness h(5, cfg);
+    const DataKey key{1, 9, 17, 100};
+    h.router.onAnt(fant(1, 9, 7, 0), 2);
+    h.router.onAnt(bant(9, 1, 7, 0), 6);
+    c.check(h.router.admitData(key, 2), "t = 0: the FANT, its BANT and a data key are new");
+
+    h.events.runUntil(29.999);
+    h.out.clear();
+    h.router.onAnt(fant(1, 9, 7, 0), 3);
+    c.check(h.rng.draws() == 1, "just before 30 s the FANT is still a duplicate");
+    h.router.onAnt(bant(9, 1, 7, 0), 6);
+    c.check(h.out.empty(), "...and so is the BANT");
+    c.check(!h.router.admitData(key, 3), "...and the data key");
+
+    h.events.runUntil(30.0);
+    h.router.onAnt(fant(1, 9, 7, 0), 3);
+    c.check(h.rng.draws() == 2, "at 30 s the FANT entry has expired: accepted again");
+    h.router.onAnt(bant(9, 1, 7, 0), 6);
+    c.check(h.out.size() == 1 && h.out[0].decision.nextHop == 3,
+            "...the BANT too, back over the reverse pointer recorded afresh");
+    c.check(h.router.admitData(key, 3), "...and the data key");
+
+    // The hops kept with the entries expire with them.
+    const DataKey later{1, 9, 17, 101};
+    h.router.onAnt(fant(1, 9, 8, 0), 3);
+    h.router.admitData(later, 3);
+    h.events.runUntil(60.0);
+    h.out.clear();
+    h.router.onAnt(bant(9, 1, 8, 0), 6);
+    c.check(h.out.empty(), "a reverse pointer 30 s old is gone: the BANT goes no further");
+    const FailureDecision d = h.router.onRouteFailure(later, 6);
+    c.check(d.decision.action == RouteAction::Drop && !d.backtrack,
+            "a previous hop 30 s old is gone: no backtrack to it");
+}
+
 }  // namespace ara::core::test
