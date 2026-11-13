@@ -16,7 +16,8 @@ constants in `core/ara-config.h`. The second is route maintenance by data
 route failure (rows "Loop prevention", "On a failed link", "No other link"). The ns-3 module `ara` (`ns3/`) carries these slices out on
 swarm-core's `SwarmRoutingBase` with no constant of its own: a data packet with
 no trail is dropped at once, by the adapter as by the core (row "Data packets
-waiting for a route"). What remains of #5 is the anchor ("Anchor candidate").
+waiting for a route"). The anchor missed; its written infeasibility verdict is
+[`benchmarks/v0.2.0-anchor.md`](benchmarks/v0.2.0-anchor.md) ("Anchor candidate").
 For a row that is not implemented, the **Implementation** column records what
 the fresh implementation is to do, and **Status** says how that plan stands
 against the paper. Section, equation and figure numbers are the
@@ -36,7 +37,9 @@ exception: the arm's hold queue for data during discovery is not adopted
 2026-11-10, …` and keep the `arm:` note as the record of where the value came
 from. After the first anchor run missed its PDR gates, the maintainer decision 2026-11-13 on [#5](https://github.com/swarm-routing/ARA/issues/5#issuecomment-6844076630)
 added the hold queue back as a default-off switch, `bufferDuringDiscovery`,
-for an A/B and a second anchor run; the default is unchanged.
+for an A/B and a second anchor run; the default is unchanged. Neither run passed
+the PDR gates, and the switch stays off by default (maintainer decision
+2026-11-13, [`benchmarks/v0.2.0-anchor.md`](benchmarks/v0.2.0-anchor.md)).
 
 ## Sources
 
@@ -203,6 +206,14 @@ establish Fig. 8's ordering; the anchor reports the raw routing-packet counts
 next to it. The harness's `nrl_bytes` (control bytes per delivered data byte),
 the nearest to Fig. 6's bits per data bit, is reported, not gated. Fig. 8 has
 DSR, not ARA, lowest at high mobility, and AODV well above ARA.
+
+**Verdict (2026-11-13): the anchor misses.** The NRL gate passes. Both PDR
+gates fail, with the default (anchor-3) and with `bufferDuringDiscovery` on
+(anchor-buffer); the first pre-registration's outputs are byte-identical to
+anchor-3's. The written infeasibility verdict, its numbers and its threats to
+validity are [`benchmarks/v0.2.0-anchor.md`](benchmarks/v0.2.0-anchor.md)
+(decided on [#5](https://github.com/swarm-routing/ARA/issues/5)). The next
+anchor, on the 2003 version, is #27's.
 
 ## Differences from AntHocNet's `ara` arm
 
