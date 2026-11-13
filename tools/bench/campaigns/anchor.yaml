@@ -23,10 +23,10 @@
 # ARA and stock ns-3 AODV run in the same invocation, so every seed pairs them
 # on the same mobility and traffic.
 #
-# NOT DISPATCHED YET: the anchor waits for ARA's route-failure backtracking
-# slice (#5). There is no `source_sha` on purpose, so `ns3-campaign dispatch`
-# refuses this plan; #5 sets it to the commit under test when it
-# pre-registers the run (this file, committed before dispatch).
+# Pre-registered on 2026-11-13 (#5): the commit under test is main after the
+# route-failure backtracking slice (#96, #98) and the swarm-core pin 0919dbf,
+# committed here before any dispatch. A later run is a new plan, never an
+# edit of this one.
 #
 # One arm: the comparison is between two protocols in one cell, not between
 # two commits. `ns3-campaign verdicts` on a change plan pairs arms, not
@@ -36,7 +36,7 @@
 #   P=tools/bench/campaigns/anchor.yaml
 #   C="python3 ../ns3-tools/python/ns3_tool/campaign.py"   # or `ns3-campaign`
 #   $C plan $P                                      # 8 jobs; dispatches nothing
-#   $C dispatch $P --cap 4                          # after #5 sets source_sha
+#   $C dispatch $P --cap 4
 #   $C status $P --brief
 #   $C collect $P --out .campaign/anchor/cells
 #   grep -ho '\(swarm-core\|routing-bench\)@[0-9a-f]*' .campaign/anchor/cells/*.txt | sort -u
@@ -44,6 +44,7 @@
 generation: anchor
 ref: main
 repo: swarm-routing/ARA
+source_sha: c7d6acb596bedccfeaa9d0810ac1b18a5fc6a36b
 workflow: benchmark-cell.yml
 program: routing-compare
 # ns3-dev:3.48-optimized on 2026-11-13: AODV-family arms stay on 3.48 while
