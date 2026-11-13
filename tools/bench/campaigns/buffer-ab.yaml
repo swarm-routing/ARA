@@ -25,9 +25,11 @@
 #   P=tools/bench/campaigns/buffer-ab.yaml
 #   C="python3 ../ns3-tools/python/ns3_tool/campaign.py"   # or `ns3-campaign`
 #   $C plan $P                                      # 4 jobs; dispatches nothing
+#   python3 -I tools/bench/check_plan_deps.py $P   # again right before dispatch: plan deps: ok
 #   $C dispatch $P --cap 4
 #   $C status $P --brief
 #   $C collect $P --out .campaign/buffer-ab/cells   # rejects a cell on another dependency set (ns3-tools#148)
+#   python3 -I tools/bench/check_plan_deps.py $P --cells .campaign/buffer-ab/cells   # every ##PROV## names the plan's commits
 #   $C verdicts $P --dir .campaign/buffer-ab/cells  # on - off per family
 generation: buffer-ab
 ref: main

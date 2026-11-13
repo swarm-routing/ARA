@@ -25,8 +25,11 @@
 #
 # This is the second run (#5, option 2: maintainer decision 2026-11-13,
 # https://github.com/swarm-routing/ARA/issues/5#issuecomment-6844076630). The
-# first, anchor.yaml at c7d6acb, missed the PDR gates and passed the NRL gate;
-# its record stays. This run changes one thing: ARA holds data while its
+# first, anchor.yaml at c7d6acb, dispatched on 2026-11-13, missed the PDR gates
+# and passed the NRL gate (the read on #5); its cells' ##PROV## lines name
+# swarm-core 360ceef (p0, p30) and 501dd7e (p120, p600), not the 0919dbf the
+# plan names, so that read is confounded and superseded (#105), and its record
+# stays. This run changes one thing: ARA holds data while its
 # discovery runs (BufferDuringDiscovery, default off, #112), set on the `ara`
 # arm below; AODV is unaffected by the attribute. Scenario, seeds (RngRun
 # 1-20 per cell), image, cells and pass rule are anchor.yaml's, unchanged.
@@ -52,9 +55,11 @@
 #   P=tools/bench/campaigns/anchor-buffer.yaml
 #   C="python3 ../ns3-tools/python/ns3_tool/campaign.py"   # or `ns3-campaign`
 #   $C plan $P                                      # 8 jobs; dispatches nothing
+#   python3 -I tools/bench/check_plan_deps.py $P   # again right before dispatch: plan deps: ok
 #   $C dispatch $P --cap 4
 #   $C status $P --brief
 #   $C collect $P --out .campaign/anchor-buffer/cells   # one dependency set in every cell (ns3-tools#148)
+#   python3 -I tools/bench/check_plan_deps.py $P --cells .campaign/anchor-buffer/cells   # every ##PROV## names the plan's commits
 #   $C verdicts $P --dir .campaign/anchor-buffer/cells     # ara - aodv per cell: dPDR, d_d99, d_NRL paired 95% CIs
 generation: anchor-buffer
 ref: main
