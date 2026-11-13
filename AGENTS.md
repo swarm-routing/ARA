@@ -117,11 +117,10 @@ rule of `docs/fidelity.md` "Anchor candidate" (ARA minus AODV, paired by seed;
 PDR CI above zero at pause 0 and 30 s, NRL CI below zero at pause 0; 120 and
 600 s reported), ARA and AODV in one `routing-compare` invocation per seed, 20
 seeds per cell in two blocks of 10, on ns3-dev 3.48-optimized by digest
-(ns-3.49's AODV livelocks, swarm-routing/ns3-containers#35). It has no
-`source_sha`, so `dispatch` refuses it until #5's backtracking slice sets
-one and pre-registers the run. Its one arm pairs protocols, not commits, so
-`verdicts` has nothing to compare for it yet: the ARA-minus-AODV read is an
-open item of #36.
+(ns-3.49's AODV livelocks, swarm-routing/ns3-containers#35), pre-registered
+at `source_sha` c7d6acb (#101). Its one arm pairs protocols, not commits:
+`reference: aodv` makes `ns3-campaign verdicts` print ARA minus AODV, paired
+by seed, for every cell (swarm-routing/ns3-tools#152).
 
 ## Golden rules (invariants — do not break)
 

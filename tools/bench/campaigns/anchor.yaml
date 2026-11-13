@@ -29,9 +29,9 @@
 # edit of this one.
 #
 # One arm: the comparison is between two protocols in one cell, not between
-# two commits. `ns3-campaign verdicts` on a change plan pairs arms, not
-# protocols, so it prints nothing for this plan; the ARA-minus-AODV paired
-# read is an open item of #36 (the PR lists it).
+# two commits. `reference: aodv` (swarm-routing/ns3-tools#152) makes
+# `ns3-campaign verdicts` print ARA minus AODV, paired by seed, for every cell:
+# the read the rule above takes. It is a read key: it changes no job.
 #
 #   P=tools/bench/campaigns/anchor.yaml
 #   C="python3 ../ns3-tools/python/ns3_tool/campaign.py"   # or `ns3-campaign`
@@ -41,6 +41,7 @@
 #   $C collect $P --out .campaign/anchor/cells
 #   grep -ho '\(swarm-core\|routing-bench\)@[0-9a-f]*' .campaign/anchor/cells/*.txt | sort -u
 #                                                   # 2 lines: one dependency set in every cell
+#   $C verdicts $P --dir .campaign/anchor/cells     # ara - aodv per cell: dPDR, d_d99, d_NRL paired 95% CIs
 generation: anchor
 ref: main
 repo: swarm-routing/ARA
@@ -53,6 +54,8 @@ image: ghcr.io/swarm-routing/ns3-dev@sha256:5585a93c5cea1980592539e2d26a4e111e0f
 # 8 jobs of 10 seeds; at most 4 cell runs at once, so PR CI keeps runners.
 cap: 4
 control: ara
+# The baseline every other protocol of a cell is paired against in `verdicts`.
+reference: aodv
 
 arms:
   ara: ""
