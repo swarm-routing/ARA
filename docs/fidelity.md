@@ -49,6 +49,7 @@ the PDR gates, and the switch stays off by default (maintainer decision
 | AR12 | Arif & Rani, *ACO Based Routing for MANETs*, International Journal of Wireless & Mobile Networks 4(2), 2012, pp. 163–174 | <https://doi.org/10.5121/ijwmn.2012.4211> |
 | BMJ98 | Broch et al., *A performance comparison of multi-hop wireless ad hoc network routing protocols*, Proceedings of the 4th annual ACM/IEEE international conference on Mobile computing and networking, 1998, pp. 85–97 | <https://doi.org/10.1145/288235.288256> |
 | G02 | Gunes, Sorges & Bouazizi, *ARA-the ant-colony based routing algorithm for MANETs*, Proceedings. International Conference on Parallel Processing Workshop, 2002, pp. 79–85 | <https://doi.org/10.1109/icppw.2002.1039715> |
+| GS03 | Günes & Spaniol, *Ant-Routing-Algorithm for Mobile Multi-Hop Ad-Hoc Networks*, Network Control and Engineering for QoS, Security and Mobility II, 2003, pp. 120–138 | <https://doi.org/10.1007/978-0-387-35703-4_9> |
 | R05 | Roth, *Termite: A Swarm Intelligent Routing Algorithm For Mobile Wireless Ad-Hoc Networks*, PhD thesis, Cornell University, 2005 | <https://hdl.handle.net/1813/240> |
 | SwarmCore | Joppi, *ns3-swarm-core*, Zenodo, 2026 | <https://doi.org/10.5281/zenodo.24138628> |
 <!-- fidelity:sources:end -->
@@ -57,7 +58,11 @@ The table is generated from [`docs/references.bib`](references.bib) by
 `fidelity.py bib sources`: change an entry there, never here. [G02] is the
 paper this sheet follows. [R05] §3.5.2 restates ARA (pp. 59–60) and the 2003
 "ARA2" (pp. 60–62); [AR12] §4.2 restates ARA and §4.3 its EARA variant; both
-are secondary. [BMJ98] is the traffic reference [G02] §4.2 cites.
+are secondary. [GS03] is the authors' 2003 revision: it calls the 2002
+version "ANT", lists what the 2003 version changed (§4.5) and compares the two
+(§5.2), so where [G02] is silent it is the authors' own account of what the
+2002 version did (#27). [BMJ98] is the traffic reference [G02] §4.2 and [GS03]
+§5.3 cite.
 `swarm-core` is the org release `core/` and `ns3/` build on.
 
 The follow-up paper ("ARA2"), M. Güneş, M. Kähmer, I. Bouazizi,
@@ -66,14 +71,17 @@ Features and Results*, Second Mediterranean Workshop on Ad-Hoc Networks
 (Med-Hoc-Net 2003), Mahdia, pp. 9–20, has no DOI and no registry or
 publisher record that confirms it (`lit_search.py confirm --title`,
 2026-11-12), so it is not in the bibliography; it was not read, and no row
-cites it.
+cites it. It is still not held (#27, 2026-11-13: its access is the authors);
+[GS03], by two of the same authors, lists the six 2003 features [R05]
+attributes to it.
 
 Also read, and setting nothing: S. A. Thakare, S. A. Ladhake, *Performance
 Comparison of ARA Protocol with DSR and AODV Protocol*, Software Engineering
 3(1):17–20, 2012, restates [G02] §3 without any constant (no DOI found in
 Crossref, so not in the bibliography). A Crossref search for other ARA papers
 by Güneş (2026-11-10) found none besides [G02]; the Med-Hoc-Net 2003 paper
-above is the only known follow-up. [BMJ98] was not read.
+above is the only known follow-up besides [GS03]. [BMJ98] was read for #27
+(2026-11-13); the scenario rows in *Parameters* say where it agrees.
 
 ## Which version of ARA
 
@@ -81,11 +89,13 @@ Two versions exist:
 
 - **ARA (2002)**, [G02] §3: the protocol this sheet describes, and the one
   whose ns-2 results ([G02] §4, Figs. 4–9) give the anchor.
-- **ARA2 (2003)**, the Med-Hoc-Net 2003 follow-up (Sources): probabilistic data forwarding, continuous
-  pheromone decay, ant priority over data, backward-ant flooding, data
-  buffering during discovery, neighbour eavesdropping. We have not read the
-  paper; what we know of it is Roth's summary, [R05] pp. 60–62, which says
-  several of these are given without implementation detail.
+- **ARA (2003)**, the authors' revision, [GS03] §4.5 and §5.2: statistical
+  path selection, continual pheromone decrease, prioritized FANTs and BANTs,
+  BANTs flooded like FANTs, a send buffer with minimal FANTs, and a MAC-Tap
+  that reads packets from the neighbourhood. [R05] pp. 60–62 summarises the
+  same six for the Med-Hoc-Net 2003 paper ("ARA2", Sources; not held). In
+  saying what each feature changed, [GS03] says what the 2002 version ("ANT")
+  did where [G02] is silent; the rows below cite it (#27).
 
 Every row below is the **2002 version** unless it says otherwise. AntHocNet's
 `ara` arm was written from [G02] but took several behaviours that [R05]
@@ -112,24 +122,24 @@ from [G02].
 | FANT duplicates (same source and sequence number) are destroyed | [G02] §3.1, §3.4 | Bounded (source, seq) history; later copies dropped without touching the table | as written |
 | A node seeing a FANT for the first time records (FANT source, previous hop, ϕ = f(hops)); one trail toward the source per discovery | [G02] §3.1 | Entry toward the source over the previous hop with ϕ raised to at least 1/hops (Parameters) | deviation: [G02] §3.1 says ϕ depends on the hop count but gives no formula; 1/hops is kept from the old arm for continuity with v2.5.0's runs (maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4); this replaces #15's constant, [R05] p. 59's reading). [AR12] §4.3 also reads it as hop-dependent |
 | Destination destroys the FANT and answers with a backward ant (BANT) that lays the trail toward the destination | [G02] §3.1, Fig. 3 | BANT handled like the FANT, roles swapped | as written |
-| How the BANT travels back (unicast along the FANT's path, or flooded) | [G02] §3.1, Fig. 3; [R05] p. 59; [AR12] §4.2 | BANT unicast back along the FANT's recorded path | deviation: [G02] does not say; decided in #15 (both secondaries' reading; a flooded BANT looped in the old arm). Cost: Fig. 3's second trail at node 3 is not reproduced |
+| How the BANT travels back (unicast along the FANT's path, or flooded) | [G02] §3.1, Fig. 3; [R05] p. 59; [AR12] §4.2; [GS03] §4.5 | BANT unicast back along the FANT's recorded path | as written: [G02] does not say, and [GS03] §4.5 does ("In ANT the BANT were sent by unicast from the target to the source node"); flooding is the 2003 change (#125). Decided in #15 on both secondaries' reading, which the authors' account confirms (#27). Cost: [G02] Fig. 3's second trail at node 3 is not reproduced |
 | Data may be sent once the source receives the BANT | [G02] §3.1 | Data starts after the first BANT; data that arrives before it is dropped (row below) | as written (sending after the BANT); holding data meanwhile is not in [G02] |
-| Data packets waiting for a route (buffering, limits, timeouts) | repo choice: maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4): buffering is ARA2's ([R05] pp. 61–62), not adopted (#15); a default-off switch for the anchor's A/B, maintainer decision 2026-11-13 on [#5](https://github.com/swarm-routing/ARA/issues/5#issuecomment-6844076630) | By default no buffering in `core/` or in the adapter: a data packet with no route at its source starts a discovery (if none is running) and is dropped; a packet in transit that loses its route follows the backtracking rule below. With `Config::bufferDuringDiscovery` (the ns-3 attribute `BufferDuringDiscovery`), a source holds its own data it has no trail for while its discovery for the destination runs (`onLocalData` answers Queue), in swarm-core's deferred queue; an ant or a data packet that lays a trail toward the destination releases it, and a discovery that ends with no trail drops it (DiscardPending). Data in transit is never held: with no trail it is dropped (`onTransitData`), even at a node that holds its own data for the same destination. A packet whose route fails after it left the source is dropped either way | default-off switch: [G02] is silent, so the default stays without buffering; the switch's limits are the old arm's (64 packets, 30 s); off, the output is byte-identical to the code without the switch |
+| Data packets waiting for a route (buffering, limits, timeouts) | repo choice: maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4): buffering is ARA2's ([R05] pp. 61–62), not adopted (#15); a default-off switch for the anchor's A/B, maintainer decision 2026-11-13 on [#5](https://github.com/swarm-routing/ARA/issues/5#issuecomment-6844076630); what the 2002 version did: [GS03] §4.5 | By default no buffering in `core/` or in the adapter: a data packet with no route at its source starts a discovery (if none is running) and is dropped; a packet in transit that loses its route follows the backtracking rule below. With `Config::bufferDuringDiscovery` (the ns-3 attribute `BufferDuringDiscovery`), a source holds its own data it has no trail for while its discovery for the destination runs (`onLocalData` answers Queue), in swarm-core's deferred queue; an ant or a data packet that lays a trail toward the destination releases it, and a discovery that ends with no trail drops it (DiscardPending). Data in transit is never held: with no trail it is dropped (`onTransitData`), even at a node that holds its own data for the same destination. A packet whose route fails is never held, with the switch or without: it takes another trail or goes back to its previous hop (rows below), and is dropped only when it has neither, which at its source starts a discovery (`onRouteFailure`) | deviation (#27): [G02] is silent, and [GS03] §4.5 says what the 2002 version did: "ARA used the first packet of a connection as the FANT without considering the packet length", and packets arriving during discovery created more FANTs. So in 2002 such a packet was flooded toward its destination, not dropped; data carried as the FANT is not implemented ([#132](https://github.com/swarm-routing/ARA/issues/132)). The default drops it; the switch holds it, which with the minimal FANT is the 2003 version's send buffer (#125). The switch is off by default; its limits are the old arm's (64 packets, 30 s); off, the output is byte-identical to the code without the switch |
 | Route maintenance by data: the relaying node adds Δϕ to (D, next hop); the next hop adds Δϕ to (S, previous hop) | [G02] §3.2 | Both reinforcements on every data hop: the node that hands a data packet to its next hop (the source included) adds Δϕ to (D, next hop) when it hands it over, after evaporating to now; the node that receives it (the destination included) adds Δϕ to (S, previous hop). A deposit on an entry that does not exist creates it at Δϕ, within the pheromone table's cap | as written; two details [G02] leaves open are readings accepted by the maintainer on 2026-11-11 ([#5](https://github.com/swarm-routing/ARA/issues/5#issuecomment-6783812825)): a deposit on a missing entry creates it (the old arm's behaviour; §3.2 only says the node "increases the pheromone value of the entry"), and the sender deposits when it hands the packet over, not on an acknowledgement (§3.2 says "relays") |
-| Evaporation by eq. 2, ϕ := (1 − q)·ϕ, applied regularly | [G02] §2.2, eq. 2, §3.2 | Eq. 2 at q per period (values below), evaluated continuously: on read, ϕ·(1 − q)^(Δt / period) through the injected clock port, as the old arm does | deviation: [G02] §3.2 has a "regular decreasing" and [R05] p. 60 reads 2002 ARA's decay as periodic, where [R05] p. 61 dates continuous decay to ARA2; kept from the old arm for continuity with v2.5.0's runs (maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4); this replaces #15's periodic reading) |
+| Evaporation by eq. 2, ϕ := (1 − q)·ϕ, applied regularly | [G02] §2.2, eq. 2, §3.2; [GS03] §4.2, §4.5 | Eq. 2 at q per period (values below), evaluated continuously: on read, ϕ·(1 − q)^(Δt / period) through the injected clock port, as the old arm does | deviation: [G02] §3.2 has a "regular decreasing", and the authors confirm it was periodic: [GS03] §4.5 says that in ANT "the decreasing of the pheromone values were simulated in intervals of a second", and makes continual decrease a 2003 change (#27). [R05] pp. 60–61 reads it the same way; kept from the old arm for continuity with v2.5.0's runs (maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4); this replaces #15's periodic reading) |
 | A trail decays to zero when no ant or data visits it; the route is then gone | [G02] §3.4 | Entry dropped below an expiry threshold (value below) | as written |
 | Multi-path: a node keeps several next hops per destination | [G02] §3.1, §3.4 | All positive-ϕ neighbours kept | as written |
-| Next-hop choice for data among the trails | [G02] §2.2, §3.4; [R05] pp. 60–61; [AR12] §4.2 | Deterministic: the neighbour with the highest ϕ; ϕ/Σϕ only as a later default-off switch | as written per [R05] p. 60's reading of 2002 ARA; decided in #15. [G02] §2.2 gives ϕ/Σϕ for ants of the generic meta-heuristic only; [AR12] §4.2 reads data forwarding as stochastic |
+| Next-hop choice for data among the trails | [G02] §2.2, §3.4; [R05] pp. 60–61; [AR12] §4.2; [GS03] §5.2 | Deterministic: the neighbour with the highest ϕ; ϕ/Σϕ only as a later default-off switch | as written per [R05] p. 60's reading of 2002 ARA; decided in #15. [GS03] §5.2 supports it: statistical path selection ("ARAstat") is the first of the 2003 extensions it compares with ANT (#27). [G02] §2.2 gives ϕ/Σϕ for ants of the generic meta-heuristic only; [AR12] §4.2 reads data forwarding as stochastic |
 | Link quality folded into the pheromone or its evaporation | [G02] §2.3, §3.4 | None | not implemented: [G02] names it as a possibility ("it is possible to integrate the connection/link quality") and as an example of what the route choice may depend on, without a rule |
 | Loop prevention: duplicate data (source address, sequence number) is returned with the DUPLICATE_ERROR flag; the previous node deactivates that link | [G02] §3.2 | Data dedup on (source, destination, IP protocol, IP identification), bounded by the history cap; a duplicate goes back to its sender flagged DUPLICATE_ERROR, which sets that link's ϕ to 0 and drops the copy | as written (the data packet's "sequence number" is a repo choice, below); the flag is a packet tag, `DataFlagTag`, with no bytes on the air (repo choice, maintainer decision 2026-11-13 on [#5](https://github.com/swarm-routing/ARA/issues/5)) |
 | FANT/BANT loop freedom through their sequence numbers | [G02] §3.4 | Covered by the ant dedup row; BANT duplicates dropped like FANTs | as written; BANT duplicates decided in #15 with the unicast BANT path |
 | "FANT forwarding" discovery variant: a relay with a route sends the FANT to that neighbour only | [AR12] §4.2 | None: every FANT is flooded | not implemented: [AR12] attributes it to another paper (its ref. [12]), not to [G02], whose §3.1 floods |
 | Route failure detected by a missing acknowledgement | [G02] §3.3 | MAC retry-limit failure from the adapter, through an `ILinkState` port | as written; [G02] does not say which acknowledgement, and also mentions a ROUTE ERROR message for a link without defining it. [R05] p. 60 reads it as "perhaps due to a MAC level communications failure" |
-| On a failed link: set its ϕ to 0, send the packet on another link if one exists | [G02] §3.3 | Same | as written |
+| On a failed link: set its ϕ to 0, send the packet on another link if one exists | [G02] §3.3 | Same | as written. The 2003 version limits it, [GS03] §4.3: "only one additional try makes sense", then the source is informed; a 2003 change, for #125 |
 | No other link: the node "informs its neighbors"; backtracking continues toward the source, which starts a new discovery | [G02] §3.3; [R05] p. 60 | Return the packet to the previous hop, which repeats the step, up to the source | as written per [R05]'s reading; decided in #15 (backtracking, not a broadcast) |
 | Discovery retries when no BANT returns | repo choice: maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4): kept from the old arm for continuity with v2.5.0's runs | FANT re-sent after a timeout that doubles per retry, up to a retry count (values below), only while the source keeps sending: a retry is due only if a data packet for that destination arrived since the last FANT, otherwise the discovery ends (maintainer decision 2026-11-10, [#5](https://github.com/swarm-routing/ARA/issues/5)) | as written: [G02] is silent (§3.3 only says the source "has to initiate a new route discovery phase" when backtracking reaches it). The old arm retried only while data was queued; with no hold queue (above), continued sending stands in for the queue |
 | Control packets carry only a sequence number and the IP header's information | [G02] §3.5 | FANT/BANT as a POD, versioned header (org rule 3); a hop-count field is needed for f(hops) | as written (header layout: repo choice under org rule 3) |
-| Ants share queues with data | [R05] p. 61 | No priority for ants | as written ([R05] states it for 2002 ARA; ant priority is an ARA2 change). [G02] does not say |
+| Ants share queues with data | [R05] p. 61; [GS03] §4.5 | No priority for ants | as written: [GS03] §4.5 says that in ANT "these packets were handled like ordinary data packets", and makes FANT and BANT priority a 2003 change (#125); [R05] p. 61 reads it the same way. [G02] does not say |
 | Sleep period / sleep mode: a node whose pheromone is below a threshold sleeps and only processes packets addressed to it | [G02] §3.4 | None | not implemented: a power feature, outside the anchor's metrics |
 | Per-node "statistic information block" | [G02] §3.4 | None | not implemented: mentioned once, never defined |
 
@@ -145,11 +155,11 @@ the ones v2.5.0's anchor ran with, re-used by the maintainer's decision on #4
 
 | Parameter | Value | Source | Notes |
 |---|---|---|---|
-| Deposit Δϕ per data packet (and per ant, generic ACO) | 0.1 | repo choice: maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4); kept from the old arm for continuity with v2.5.0's runs, to be swept later | [G02] eq. 1 and §3.2 use Δϕ without a value; §2.2 calls it "a constant amount" for the generic meta-heuristic. arm: 0.1 |
+| Deposit Δϕ per data packet (and per ant, generic ACO) | 0.1 | repo choice: maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4); kept from the old arm for continuity with v2.5.0's runs, to be swept later; the authors' value, [GS03] §4.2 | [GS03] §4.2, on the authors' own simulations: "In our simulations Δϕ has a value of 0.1" (#27). [G02] eq. 1 and §3.2 use Δϕ without a value; §2.2 calls it "a constant amount" for the generic meta-heuristic. arm: 0.1 |
 | Initial FANT/BANT pheromone f(hops) | ϕ := max(ϕ, 1/hops) | repo choice: maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4); kept from the old arm for continuity with v2.5.0's runs | [G02] §3.1: "depending on the number of hops"; no formula, so 1/hops stays a deviation (Mechanisms). Replaces #15's constant ([R05] p. 59, "some constant amount of pheromone"). arm: 1/hops, raised to at least that value |
 | Evaporation rate q, range | (0, 1] | [G02] eq. 2 | Range only |
-| Evaporation rate q, value | 0.1 per period | repo choice: maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4); kept from the old arm for continuity with v2.5.0's runs, to be swept later | arm: 0.1 per period |
-| Evaporation period | 1 s, evaluated continuously | repo choice: maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4); kept from the old arm for continuity with v2.5.0's runs | [G02] §3.2: "regular decreasing". [R05] p. 61 says the pre-ARA2 schemes decayed on a fixed period "such as one second", an example, not ARA's value; continuous evaluation is a deviation (Mechanisms). arm: 1 s, evaluated continuously |
+| Evaporation rate q, value | 0.1 per period | repo choice: maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4); kept from the old arm for continuity with v2.5.0's runs, to be swept later; [GS03] §4.2 is ambiguous | [GS03] §4.2 says the values are decreased every T = 1 s, multiplicatively "with a factor of (1 − q) = 0.1": read literally that is q = 0.9, nine times this q; read as q = 0.1 (factor 0.9) it is this value. The text does not settle which, so both are candidates for the sweep (#108; #27). arm: 0.1 per period |
+| Evaporation period | 1 s, evaluated continuously | [GS03] §4.2, §4.5 | [GS03] §4.2 gives T = 1 s, and §4.5 says ANT decreased the values in intervals of a second: the period is the authors' value for the 2002 version (#27). Evaluating it continuously is the 2003 change, here a repo choice (maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4), kept from the old arm for continuity with v2.5.0's runs; Mechanisms). [G02] §3.2: "regular decreasing". [R05] p. 61's fixed period "such as one second" was read as an example; [GS03] shows it was ARA's own. arm: 1 s, evaluated continuously |
 | Route-expiry threshold | ϕ < 0.01 | repo choice: maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4); kept from the old arm for continuity with v2.5.0's runs | [G02] §3.4 only says ϕ decreases "to zero". arm: ϕ < 0.01 |
 | Sleep threshold | n/a | repo choice: not needed, sleep mode is not implemented (Mechanisms); accepted by the maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4) | [G02] §3.4 gives no value |
 | FANT maximum hops / TTL | 35 | repo choice: maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4); kept from the old arm for continuity with v2.5.0's runs | [AR12] §4.2 mentions a maximum hop count as a way to limit flooding, without a value. arm: 35 (ns-3 AODV's NetDiameter); the BANT carries the same TTL |
@@ -164,14 +174,14 @@ the ones v2.5.0's anchor ran with, re-used by the maintainer's decision on #4
 | Nodes | 50 | [G02] §4.1 | |
 | Area | 1500 m × 300 m | [G02] §4.1 | |
 | MAC | IEEE 802.11 | [G02] §4.1 | Rate, radio range and propagation not given |
-| 802.11 data rate | 2 Mbit/s | repo choice: v2.5.0's anchor (`--scenario=paper`, the harness's default `constant2`), re-used by the 2026-11-09 decision on #4, accepted by the maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4) | [G02] §4.1 does not give it |
-| Radio range and propagation | 300 m, disk (range) model | repo choice: v2.5.0's anchor (`--scenario=paper`), re-used by the 2026-11-09 decision on #4, accepted by the maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4) | [G02] §4.1 does not give it. The harness calls the preset the [BMJ98] field; not checked against that paper (not read) |
-| Mobility | random waypoint, maximum speed 10 m/s | [G02] §4.1 | |
-| Minimum speed | 1 m/s | repo choice: v2.5.0's anchor (`--scenario=paper` default), re-used by the 2026-11-09 decision on #4, accepted by the maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4) | [G02] §4.1 gives the maximum only |
-| Pause times | 0, 30, 60, 120, 300, 600, 900 s | [G02] §4.1 | 0 s moves constantly; 900 s is static. v2.5.0's anchor ran 0, 30, 120, 600 |
+| 802.11 data rate | 2 Mbit/s | repo choice: v2.5.0's anchor (`--scenario=paper`, the harness's default `constant2`), re-used by the 2026-11-09 decision on #4, accepted by the maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4) | [G02] §4.1 does not give it. [BMJ98] §4 models its radio on the Lucent WaveLAN and states no rate in its text (#27) |
+| Radio range and propagation | 300 m, disk (range) model | repo choice: v2.5.0's anchor (`--scenario=paper`), re-used by the 2026-11-09 decision on #4, accepted by the maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4) | [G02] §4.1 does not give it. [BMJ98], whose field the harness names the preset after, differs (#27): free-space propagation within a reference distance and two-ray ground reflection beyond it (§2.1), and a nominal transmission range of 250 m (§4.3). The 300 m disk is the harness's, not Broch's |
+| Mobility | random waypoint, maximum speed 10 m/s | [G02] §4.1 | [GS03] §5.1 uses 10 m/s too; [BMJ98] §4.1 reports 20 m/s, and 1 m/s for comparison, not 10 (#27) |
+| Minimum speed | 1 m/s | repo choice: v2.5.0's anchor (`--scenario=paper` default), re-used by the 2026-11-09 decision on #4, accepted by the maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4) | [G02] §4.1 gives the maximum only. [GS03] §5.1 (the 2003 version's runs, in the same field) draws the speed "uniformly distributed between 0 and the maximal velocity", as [BMJ98] §4.1 does: a minimum of 0, where this is 1 m/s (#27) |
+| Pause times | 0, 30, 60, 120, 300, 600, 900 s | [G02] §4.1 | 0 s moves constantly; 900 s is static. v2.5.0's anchor ran 0, 30, 120, 600. [BMJ98] §4.1 and [GS03] §5.1 use the same seven (#27) |
 | Simulated time | 900 s | [G02] §4.1 | |
-| Traffic | 10 CBR connections | [G02] §4.2 | "parameters similar to those in [2]" ([BMJ98]) |
-| CBR packet size and rate | 64 bytes, 1 packet/s (512 bit/s) per flow, sources started in [0, 180] s | repo choice: v2.5.0's anchor (`--scenario=paper`), re-used by the 2026-11-09 decision on #4, accepted by the maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4) | [G02] §4.2 only says "similar to" [BMJ98], which was not read; these values are not claimed as Broch's or as [G02]'s |
+| Traffic | 10 CBR connections | [G02] §4.2 | "parameters similar to those in [2]" ([BMJ98]); [GS03] §5.3 runs 10 CBR connections too, "similar to those in [20]" ([BMJ98] again) |
+| CBR packet size and rate | 64 bytes, 1 packet/s (512 bit/s) per flow, sources started in [0, 180] s | repo choice: v2.5.0's anchor (`--scenario=paper`), re-used by the 2026-11-09 decision on #4, accepted by the maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4) | [G02] §4.2 only says "similar to" [BMJ98]. [BMJ98] §4.2 (read for #27): 64-byte packets, and connections started uniformly between 0 and 180 s, as here, but 4 packets per second per source (with 10, 20 or 30 sources), where this sends 1. [GS03] Fig. 6 labels its traffic "CBR 4x512Byte". So the size and the start window are Broch's; the rate is not, and is not claimed as [G02]'s |
 | Runs per point | 10 | [G02] §4.2, Fig. 5 | The anchor run uses ≥ 20 paired seeds (org rule 6; maintainer decision 2026-11-10, [#4](https://github.com/swarm-routing/ARA/issues/4)) |
 | Confidence interval | 95 % (α = 0.05) | [G02] Fig. 5, Fig. 7, Fig. 9 | |
 | Overhead metrics | routing bits / data bits; routing packets | [G02] Fig. 6, Fig. 8 | |
@@ -213,7 +223,16 @@ gates fail, with the default (anchor-3) and with `bufferDuringDiscovery` on
 anchor-3's. The written infeasibility verdict, its numbers and its threats to
 validity are [`benchmarks/v0.2.0-anchor.md`](benchmarks/v0.2.0-anchor.md)
 (decided on [#5](https://github.com/swarm-routing/ARA/issues/5)). The next
-anchor, on the 2003 version, is #27's.
+anchor, on the 2003 version, is #125's.
+
+**Checked against [BMJ98] (#27, 2026-11-13).** The field, node count,
+simulated time, pause times, packet size and start window are Broch's. Four
+scenario values are not (*Parameters*): the radio (a 300 m disk here; Broch
+has 250 m nominal range, two-ray ground), the minimum speed (1 m/s here, 0 in
+Broch and in [GS03] §5.1), the maximum speed (10 m/s here, as [G02] and
+[GS03]; Broch reports 20 m/s and 1 m/s) and the rate (1 packet/s here, 4 in
+Broch). The v0.2.0 verdict stands as pre-registered. A new anchor plan (#125)
+says which values it uses.
 
 ## Differences from AntHocNet's `ara` arm
 
