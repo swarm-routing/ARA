@@ -18,7 +18,9 @@ revision with --rev, e.g. HEAD) and fails unless:
 
   1. core/CMakeLists.txt at every `source_sha` of the plan pins, as
      SWARM_CORE_REF, the swarm-core commit the workflow builds: the commit
-     under test was written and tested by CI with that swarm-core;
+     under test was written and tested by CI with that swarm-core (a
+     `source_sha` that is not a 40-char commit, quoted or not, fails: none
+     is skipped);
   2. the plan names every dependency of the workflow with its commit, as
      `<name>@<commit>` (the form of ##PROV## `modules=`) or as the workflow's
      own line `<name>=<owner>/<repo>@<commit>`, in a field or in its header,
@@ -53,13 +55,19 @@ def git(root, *args):
 
 def plan_field(text, key):
     m = re.search(rf"^{key}:\s*(\S+)", text, re.M)
-    return m.group(1) if m else None
+    return m.group(1).strip("'\"") if m else None
 
 
 def plan_source_shas(text):
-    """Every source_sha of the plan's fields (not of its comments), in order."""
+    """Every source_sha of the plan's fields (not of its comments), in order.
+
+    Returns (commits, others): `others` are the values that are not a 40-char
+    commit, which ns3-campaign refuses too. A value may be quoted.
+    """
     fields = "\n".join(line.split("#", 1)[0] for line in text.splitlines())
-    return list(dict.fromkeys(re.findall(rf"\bsource_sha:\s*({SHA})\b", fields)))
+    values = [v.strip("'\"") for v in re.findall(r"\bsource_sha[\"']?\s*:\s*([^\s,}]*)", fields)]
+    shas = [v for v in values if re.fullmatch(SHA, v)]
+    return list(dict.fromkeys(shas)), [v for v in values if v not in shas]
 
 
 def plan_names(text, name):
@@ -80,6 +88,13 @@ def check(root, plan_path, rev=None, cells=None, out=print):
     text = pathlib.Path(plan_path).read_text(encoding="utf-8")
     workflow = plan_field(text, "workflow") or "benchmark-cell.yml"
     rev = rev or f"origin/{plan_field(text, 'ref') or 'main'}"
+    # Both reach `git show`: a revision is never an option, a workflow is a file name.
+    if rev.startswith("-") or not re.fullmatch(r"[\w./~^@{}-]+", rev):
+        fail(f"{rev!r} is not a revision")
+        return fails
+    if not re.fullmatch(r"\w[\w.-]*\.ya?ml", workflow):
+        fail(f"{workflow!r} is not a workflow file name")
+        return fails
     wf_path = f".github/workflows/{workflow}"
     wf = git(root, "show", f"{rev}:{wf_path}")
     if wf is None:
@@ -92,9 +107,11 @@ def check(root, plan_path, rev=None, cells=None, out=print):
     for name, commit in deps.items():
         out(f"     {wf_path} at {rev}: {name}@{commit}")
 
-    shas = plan_source_shas(text)
-    if not shas:
+    shas, others = plan_source_shas(text)
+    if not shas and not others:
         fail("the plan has no source_sha")
+    for value in others:
+        fail(f"source_sha {value!r} is not a 40-char commit: it is not checked")
     for sha in shas:
         cmake = git(root, "show", f"{sha}:core/CMakeLists.txt")
         pin = PIN.search(cmake) if cmake else None
@@ -214,6 +231,17 @@ def self_test():
         p.write_text(f"{named}ref: main\npins:\n  base: {{source_sha: {old}}}\n"
                      f"  head: {{source_sha: {new}}}\n")  # fmt: skip
         expect("every pin is read", go(p), 1, "pins swarm-core aaaaaaa")
+        # A value the regex of the first version skipped: the stale base went unchecked.
+        p.write_text(f"{named}ref: main\npins:\n  base: {{source_sha: \"{old}\"}}\n"
+                     f"  head: {{source_sha: {new}}}\n")  # fmt: skip
+        expect("a quoted source_sha is read", go(p), 1, "pins swarm-core aaaaaaa")
+        p.write_text(f"{named}ref: main\npins:\n  base: {{source_sha: {old[:12]}}}\n"
+                     f"  head: {{source_sha: {new}}}\n")  # fmt: skip
+        expect("a source_sha that is not 40 hex digits", go(p), 1, "is not a 40-char commit")
+        expect("a revision that is an option", go(plan(new, named), rev="--output=x"),
+               1, "is not a revision")  # fmt: skip
+        p.write_text(f"{named}ref: main\nworkflow: --x.yml\nsource_sha: {new}\n")
+        expect("a workflow that is not a file name", go(p), 1, "is not a workflow file name")
 
         cells = root / "cells"
         cells.mkdir()
@@ -227,7 +255,7 @@ def self_test():
 
     for f in failures:
         print(f"FAIL {f}")
-    print(f"self-test: {'FAIL' if failures else 'ok'} (12 cases)")
+    print(f"self-test: {'FAIL' if failures else 'ok'} (16 cases)")
     return 1 if failures else 0
 
 
