@@ -1,3 +1,27 @@
+## v0.2.0 (2026-11-13)
+### Release status
+
+v0.2.0 is the gated release, and its anchor **misses**. Of the three gates of org golden rule 6 it clears two: the fidelity sheet against its source, Güneş, Sorges & Bouazizi, IWAHN 2002 (<https://doi.org/10.1109/icppw.2002.1039715>; `docs/fidelity.md`), and the per-PR delivery smoke. The third, the anchor on that paper's trend against AODV, misses: ARA's routing load is below AODV's at every pause time, but its delivery is below AODV's at pause 0 and 30 s, so both gated PDR checks fail (`docs/benchmarks/v0.2.0-anchor.md`; maintainer decision 2026-11-13 on #5). Org rule 6 counts a comparator's numbers only after its three gates, so v0.2.0 ships with that written infeasibility verdict, and its delivery numbers are not presented as a reproduction of the paper. The next anchor is the 2003 version's, a different source with its own trend (#27, #125, v0.3.0). It ships `core/` (MIT OR GPL-2.0-only, with `core/LICENSE`), the ns-3 contrib module `ara` (`ns3/`, GPL-2.0-only) and `docs/`, as they stand on `main` at the release commit; the anchor's raw cells are in the repository at the tag, under `results/cells/`.
+
+
+### Feat
+
+- **core**: a default-off switch that holds data while its discovery runs (#112)
+- **ns3**: the adapter carries out duplicate errors and route-failure backtracking (#98)
+- **bench**: the anchor plan, the paper trend as a paired campaign (#97)
+- **core**: duplicate errors and route-failure backtracking (#96)
+- **bench**: benchmark pipeline: a caller of the reusable cell and the change-test smoke plan (#93)
+- **observer**: report through swarm-core's router observer (#54)
+
+### Fix
+
+- audit follow-ups (a plan-dependency check for the anchor, the dedup lifetime, stale status text) (#111)
+
+### Perf
+
+- **core**: age() lists only the entries about to expire (#94)
+- **core**: read pheromone rows without entries() copies (#92)
+
 ## v0.1.0 (2026-11-11)
 ### Release status
 
