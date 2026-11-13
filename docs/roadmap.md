@@ -88,7 +88,7 @@ flowchart TB
     I27 -.-> I125
     I27 -.-> I132
     I27 -.-> I140
-    I140 -.->|"q for the A/Bs"| I125
+    I140 -->|"q for its A/Bs and the 2003 anchor;<br/>the switches' code may come first"| I125
     I125 --> V03
     I132 --> V03
     I140 --> V03
