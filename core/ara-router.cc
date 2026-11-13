@@ -54,18 +54,23 @@ void Router::age() {
         lastAged_ = now;
         return;
     }
-    // The table does not say which entries expired: compare before and after,
-    // in (destination, neighbour) order, so the report is deterministic.
-    std::vector<std::pair<NodeAddress, NodeAddress>> before;
+    // The table does not say which entries expired. Find them first with
+    // evaporate()'s own test (value * retain < floor), reading each row in
+    // place (no copy), into a reused buffer: steady state allocates nothing
+    // but destinations(). The order is (destination, neighbour), so the
+    // report is deterministic.
+    expiring_.clear();
     for (const NodeAddress dest : table_.destinations()) {
-        for (const auto& e : table_.entries(dest))
-            before.emplace_back(dest, e.neighbor);
+        for (const auto& e : table_.row(dest)) {
+            if (e.value * retain < config_.expiryThreshold)
+                expiring_.emplace_back(dest, e.neighbor);
+        }
     }
-    table_.evaporate(retain, config_.expiryThreshold);
+    // A retain evaporate() refuses removes nothing: then nothing expired.
+    if (table_.evaporate(retain, config_.expiryThreshold) == 0) expiring_.clear();
     lastAged_ = now;
-    for (const auto& [dest, over] : before) {
-        if (!table_.contains(dest, over)) observer_->onRouteChanged(dest, over, false);
-    }
+    for (const auto& [dest, over] : expiring_)
+        observer_->onRouteChanged(dest, over, false);
     reportState();
 }
 
@@ -115,18 +120,10 @@ AntDecision Router::decided(AntDecision decision, NodeAddress dest) {
     return decision;
 }
 
-// Fidelity "Next-hop choice for data among the trails": the highest ϕ;
-// entries() is in ascending neighbour order, so a tie goes to the lowest.
+// Fidelity "Next-hop choice for data among the trails": the highest ϕ > 0,
+// a tie to the lowest neighbour; bestEntry() reads the row in place.
 NodeAddress Router::bestHop(NodeAddress dest) const {
-    NodeAddress best = kInvalidAddress;
-    double bestValue = 0.0;
-    for (const auto& e : table_.entries(dest)) {
-        if (e.value > bestValue) {
-            best = e.neighbor;
-            bestValue = e.value;
-        }
-    }
-    return best;
+    return table_.bestEntry(dest).neighbor;
 }
 
 // Fidelity "A node seeing a FANT for the first time records ...": ϕ raised to

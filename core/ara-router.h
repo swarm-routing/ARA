@@ -168,6 +168,8 @@ private:
     Time lastAged_;
     swarm::core::IRouterObserver* observer_ = nullptr;
     std::optional<std::size_t> reportedEntries_;  ///< table size the observer last heard
+    /// age()'s scratch: the (destination, neighbour) entries about to expire.
+    std::vector<std::pair<NodeAddress, NodeAddress>> expiring_;
 };
 
 }  // namespace ara::core
