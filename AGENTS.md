@@ -169,6 +169,14 @@ anchor-3's); the written infeasibility verdict is
 `docs/benchmarks/v0.2.0-anchor.md`. A new anchor (the 2003 version, #27) is a
 new plan, never an edit of these.
 
+`core/` builds at C++23, the C++ standard of the ns-3 release the org
+supports (ns-3's `CMAKE_CXX_STANDARD_MINIMUM`, C++23 from ns-3.46), the same
+standard the ns-3 module compiles at inside ns-3 and the one swarm-core's
+`core/` targets and passes on through `swarm::core`
+(swarm-routing/ns3-swarm-core#141, its `docs/api-policy.md` "C++ standard").
+When ns-3 raises its minimum, `core/CMakeLists.txt`'s `CMAKE_CXX_STANDARD`
+follows.
+
 ## Golden rules (invariants — do not break)
 
 Org-wide (1–9), then this repo's own.
