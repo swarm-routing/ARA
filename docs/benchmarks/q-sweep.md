@@ -40,7 +40,7 @@ any dispatch, and `tools/bench/check_plan_deps.py` passed on it right before.
 Provenance (`python3 -I tools/bench/check_plan_deps.py tools/bench/campaigns/q-sweep.yaml --cells results/cells/q-sweep`):
 
 ```
-ok   8 cells, 12 ##PROV## lines: swarm-core@69664219b2edc63995614332cf9f651b1720622b, routing-bench@3d279b83392a00288050574cee4288f30205658b
+ok   8 cells, 12 ##PROV## lines: swarm-core@e20aad3f92dfd253d7c6411f648b90a32eee5038, routing-bench@3d279b83392a00288050574cee4288f30205658b
 plan deps: ok
 ```
 
