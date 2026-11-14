@@ -35,10 +35,13 @@ permissions:
 
 jobs:
   ci:
-    uses: swarm-routing/.github/.github/workflows/reusable-ns3-ci.yml@main
+    uses: swarm-routing/.github/.github/workflows/reusable-ns3-ci.yml@claude/ns3-ci-canary
     with:
       modules: ara=ns3
       dependencies: |
+        swarm-core=swarm-routing/ns3-swarm-core@main
+        routing-bench=swarm-routing/ns3-tools@main:ns3/routing-bench
+      canary-dependencies: |
         swarm-core=swarm-routing/ns3-swarm-core@main
         routing-bench=swarm-routing/ns3-tools@main:ns3/routing-bench
       ns3-versions: ${{ inputs.ns3-versions || '["latest"]' }}
