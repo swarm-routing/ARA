@@ -16,8 +16,9 @@ dispatch, and again on the collected cells:
 It reads the cell workflow at the plan's dispatch ref (`origin/<ref>`; another
 revision with --rev, e.g. HEAD) and fails unless:
 
-  1. core/CMakeLists.txt at every `source_sha` of the plan pins, as
-     SWARM_CORE_REF, the swarm-core commit the workflow builds: the commit
+  1. every `source_sha` of the plan pins the swarm-core commit the workflow
+     builds (swarm-core.lock's SWARM_CORE_COMMIT, the release's commit, or, at
+     a commit from before the lock, core/CMakeLists.txt's SWARM_CORE_REF): the commit
      under test was written and tested by CI with that swarm-core. The plan
      is parsed as ns3-campaign parses it (PyYAML for .yaml/.yml, tomllib,
      json), and `source_sha` is read where ns3-campaign reads it: the plan's
@@ -58,6 +59,7 @@ REPO = os.path.dirname(os.path.dirname(HERE))
 SHA = r"[0-9a-f]{40}"
 DEP_LINE = re.compile(rf"^\s+([a-z0-9][a-z0-9-]*)=[\w.-]+/[\w.-]+@({SHA})(?::\S+)?\s*$", re.M)
 PIN = re.compile(rf'set\(SWARM_CORE_REF\s+"({SHA})"')
+LOCK_PIN = re.compile(rf"^SWARM_CORE_COMMIT=({SHA})$", re.M)
 
 
 def inside(root, path):
@@ -176,13 +178,22 @@ def check(root, plan_path, rev=None, cells=None, out=print):
     for problem in problems:
         fail(problem)
     for sha in shas:
-        cmake = git(root, "show", f"{sha}:core/CMakeLists.txt")
-        pin = PIN.search(cmake) if cmake else None
+        # the release lock (swarm-routing/ns3-swarm-core#134), else the older commit pin
+        lock = git(root, "show", f"{sha}:swarm-core.lock")
+        pin = LOCK_PIN.search(lock) if lock else None
+        where = "swarm-core.lock"
         if not pin:
-            fail(f"cannot read SWARM_CORE_REF in core/CMakeLists.txt at {sha} (git fetch origin)")
+            cmake = git(root, "show", f"{sha}:core/CMakeLists.txt")
+            pin = PIN.search(cmake) if cmake else None
+            where = "SWARM_CORE_REF"
+        if not pin:
+            fail(
+                f"cannot read swarm-core.lock or SWARM_CORE_REF in core/CMakeLists.txt at {sha} "
+                "(git fetch origin)"
+            )
         elif pin.group(1) != deps["swarm-core"]:
             fail(
-                f"source_sha {sha[:7]} pins swarm-core {pin.group(1)[:7]} (SWARM_CORE_REF), "
+                f"source_sha {sha[:7]} pins swarm-core {pin.group(1)[:7]} ({where}), "
                 f"but its cells would build on {deps['swarm-core'][:7]}"
             )
         else:
@@ -234,7 +245,7 @@ def check(root, plan_path, rev=None, cells=None, out=print):
 
 
 def self_test():
-    a, b, rb = "a" * 40, "b" * 40, "c" * 40
+    a, b, rb, c = "a" * 40, "b" * 40, "c" * 40, "d" * 40
     failures = []
 
     def expect(what, got, want_fails, needle=None):
@@ -337,6 +348,31 @@ def self_test():
         p.write_text(f"{named}ref: main\nworkflow: --x.yml\nsource_sha: {new}\n")
         expect("a workflow that is not a file name", go(p), 1, "is not a workflow file name")
 
+        # swarm-routing/ns3-swarm-core#134: a source_sha with swarm-core.lock is read from the lock
+        (root / "swarm-core.lock").write_text(f"SWARM_CORE_TAG=v9.9.9\nSWARM_CORE_COMMIT={c}\n")
+        (root / "core/CMakeLists.txt").write_text("file(STRINGS ../swarm-core.lock x)\n")
+        (root / ".github/workflows/benchmark-cell.yml").write_text(
+            "      dependencies: |\n"
+            f"        swarm-core=swarm-routing/ns3-swarm-core@{c}\n"
+            f"        routing-bench=swarm-routing/ns3-tools@{rb}:ns3/routing-bench\n"
+        )
+        run("add", "-A")
+        run("commit", "-q", "-m", "lock")
+        locked = git(root, "rev-parse", "HEAD").strip()
+        named_c = f"# swarm-core@{c[:7]} routing-bench@{rb}\n"
+        expect("a locked source_sha in step", go(plan(locked, named_c)), 0)
+        expect("a pre-lock source_sha against the locked workflow",
+               go(plan(new, named_c)), 1, "pins swarm-core bbbbbbb (SWARM_CORE_REF)")  # fmt: skip
+        (root / "swarm-core.lock").unlink()
+        (root / "core/CMakeLists.txt").write_text(f'set(SWARM_CORE_REF "{b}" CACHE STRING\n')
+        (root / ".github/workflows/benchmark-cell.yml").write_text(
+            "      dependencies: |\n"
+            f"        swarm-core=swarm-routing/ns3-swarm-core@{b}\n"
+            f"        routing-bench=swarm-routing/ns3-tools@{rb}:ns3/routing-bench\n"
+        )
+        run("add", "-A")
+        run("commit", "-q", "-m", "back to the pin, for the cases below")
+
         cells = root / "cells"
         cells.mkdir()
         prov = "##PROV## commit=x modules=ara@{0},swarm-core@{1},routing-bench@{2} key=k\n"
@@ -365,7 +401,7 @@ def self_test():
 
     for f in failures:
         print(f"FAIL {f}")
-    print(f"self-test: {'FAIL' if failures else 'ok'} (30 cases)")
+    print(f"self-test: {'FAIL' if failures else 'ok'} (32 cases)")
     return 1 if failures else 0
 
 

@@ -34,3 +34,8 @@ required_checks = ["check / org-sync", "title / title", "headers / licence", "co
 # Merge through a merge queue (swarm-routing/.github#130); every workflow behind a required
 # check also runs on merge_group.
 merge_queue = true
+
+[review]
+# a new dependency on a moving ref fails protocol-review: this repository
+# consumes swarm-core by release (swarm-routing/ns3-swarm-core#134)
+moving_refs = "fail"
