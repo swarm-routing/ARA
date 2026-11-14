@@ -78,5 +78,6 @@ RELEASE_VERSION ?= $(shell sed -n 's/^version = "\(.*\)"$$/\1/p' .cz.toml)
 dist: ## the release asset in dist/: ara-<ver>.tar.gz
 	rm -rf dist && mkdir -p dist
 	git archive --format=tar.gz --prefix=ara-$(RELEASE_VERSION)/ -o dist/ara-$(RELEASE_VERSION).tar.gz HEAD \
-		$$(git ls-tree --name-only HEAD core ns3 docs LICENSE LICENSE-MIT LICENSING.md README.md AGENTS.md Makefile CHANGELOG.md)
+		$$(git ls-tree --name-only HEAD core swarm-core.lock ns3 docs LICENSE LICENSE-MIT LICENSING.md README.md AGENTS.md Makefile CHANGELOG.md)
 	tar -tzf dist/ara-$(RELEASE_VERSION).tar.gz | grep -qx 'ara-$(RELEASE_VERSION)/core/LICENSE'
+	tar -tzf dist/ara-$(RELEASE_VERSION).tar.gz | grep -qx 'ara-$(RELEASE_VERSION)/swarm-core.lock'
