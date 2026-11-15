@@ -1,22 +1,14 @@
 # ARA
 
 <!-- org-sync:begin badges -->
-[![Release](https://img.shields.io/github/v/release/swarm-routing/ARA?sort=semver&cacheSeconds=1800)](https://github.com/swarm-routing/ARA/releases)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24125198.svg)](https://doi.org/10.5281/zenodo.24125198)
-[![Cite](https://img.shields.io/badge/cite-CITATION.cff-blue)](CITATION.cff)
-[![Licence: GPL-2.0-only, core/ tools/ MIT OR GPL-2.0-only](https://img.shields.io/badge/licence-GPL--2.0--only%2C%20core%2F%20tools%2F%20MIT%20OR%20GPL--2.0--only-blue)](LICENSING.md)
-[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow)](https://www.conventionalcommits.org)
-[![Colony Arena: ARA](https://img.shields.io/badge/Colony%20Arena-project%20page-orange)](https://swarm-routing.github.io/projects/ARA/)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/swarm-routing/ARA/badge)](https://scorecard.dev/viewer/?uri=github.com/swarm-routing/ARA)
-[![C++20](https://img.shields.io/badge/C%2B%2B-20-blue?logo=cplusplus)](AGENTS.md)
-[![Runs on ns-3](https://img.shields.io/badge/runs%20on-ns--3-informational)](https://www.nsnam.org)
-[![Built on: ns3-dev](https://img.shields.io/badge/built%20on-ns3--dev%20image-blue?logo=docker)](https://github.com/orgs/swarm-routing/packages/container/package/ns3-dev)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ARA&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ARA)
-[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ARA&metric=bugs)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ARA)
-[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ARA&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ARA)
-[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ARA&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ARA)
-[![codecov](https://codecov.io/gh/swarm-routing/ARA/graph/badge.svg)](https://codecov.io/gh/swarm-routing/ARA)
-[![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/swarm-routing/ARA?utm_source=oss&utm_medium=github&utm_campaign=swarm-routing%2FARA&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)](https://coderabbit.ai)
+| Group | Badges |
+| --- | --- |
+| Build | [![Built on: ns3-dev](https://img.shields.io/badge/built%20on-ns3--dev%20image-blue?logo=docker)](https://github.com/orgs/swarm-routing/packages/container/package/ns3-dev) |
+| Quality | [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ARA&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ARA) [![Bugs](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ARA&metric=bugs)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ARA) [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ARA&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ARA) [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ARA&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ARA) [![codecov](https://codecov.io/gh/swarm-routing/ARA/graph/badge.svg)](https://codecov.io/gh/swarm-routing/ARA) [![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/swarm-routing/ARA?utm_source=oss&utm_medium=github&utm_campaign=swarm-routing%2FARA&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)](https://coderabbit.ai) |
+| Release | [![Release](https://img.shields.io/github/v/release/swarm-routing/ARA?sort=semver&cacheSeconds=1800)](https://github.com/swarm-routing/ARA/releases) [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24125198.svg)](https://doi.org/10.5281/zenodo.24125198) [![Cite](https://img.shields.io/badge/cite-CITATION.cff-blue)](CITATION.cff) [![Licence: GPL-2.0-only, core/ tools/ MIT OR GPL-2.0-only](https://img.shields.io/badge/licence-GPL--2.0--only%2C%20core%2F%20tools%2F%20MIT%20OR%20GPL--2.0--only-blue)](LICENSING.md) |
+| Trust | [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/swarm-routing/ARA/badge)](https://scorecard.dev/viewer/?uri=github.com/swarm-routing/ARA) |
+| Stack | [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue?logo=cplusplus)](AGENTS.md) [![Runs on ns-3](https://img.shields.io/badge/runs%20on-ns--3-informational)](https://www.nsnam.org) |
+| Community & docs | [![Colony Arena: ARA](https://img.shields.io/badge/Colony%20Arena-project%20page-orange)](https://swarm-routing.github.io/projects/ARA/) [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow)](https://www.conventionalcommits.org) |
 <!-- org-sync:end badges -->
 
 ARA, the Ant-Colony-Based Routing Algorithm (Güneş, Sorges & Bouazizi, 2002),
@@ -53,7 +45,7 @@ Each release also has its own **version DOI**, listed on [its Zenodo record](htt
 Please also cite the work it builds on:
 
 - M. Gunes, U. Sorges, I. Bouazizi, *ARA-the ant-colony based routing algorithm for MANETs*, Proceedings. International Conference on Parallel Processing Workshop, pp. 79–85, 2002, [doi:10.1109/icppw.2002.1039715](https://doi.org/10.1109/icppw.2002.1039715). The algorithm this repository implements; docs/fidelity.md maps each of its sections to the code and marks the repository choices.
-- D. H. Joppi, *ns3-swarm-core*, 2026, [doi:10.5281/zenodo.24138628](https://doi.org/10.5281/zenodo.24138628). The shared swarm-routing primitives core/ builds on (pinned by SWARM_CORE_REF) and the ns-3 glue the ara module derives from.
+- D. H. Joppi, *ns3-swarm-core*, 2026, [doi:10.5281/zenodo.24138628](https://doi.org/10.5281/zenodo.24138628). The shared swarm-routing primitives core/ builds on (pinned by release: swarm-core.lock) and the ns-3 glue the ara module derives from.
 
 What this implementation reproduces from its sources, and every deliberate deviation, is in [docs/fidelity.md](docs/fidelity.md).
 
