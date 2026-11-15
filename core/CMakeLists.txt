@@ -127,6 +127,12 @@ include(GNUInstallDirs)
 target_include_directories(ara_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/ara-core>)
+if(ARA_CORE_SANITIZE)
+  # The objects are instrumented, so whatever links them needs the sanitizer
+  # runtime: add_link_options above reaches this directory's targets only, not
+  # a consumer's (or an installed package's) executable.
+  target_link_options(ara_core INTERFACE -fsanitize=address,undefined)
+endif()
 target_link_libraries(ara_core PUBLIC swarm::core)
 target_compile_options(ara_core PRIVATE ${ARA_WARNINGS})
 
