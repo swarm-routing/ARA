@@ -13,8 +13,26 @@
 # SWARM_CORE_DIR: a local swarm-core core/ directory (development against an
 # unreleased swarm-core); empty fetches the release ../swarm-core.lock names.
 # ARA_CORE_SANITIZE=ON adds ASan + UBSan, as the sanitized CI leg.
+# ARA_CORE_TESTS builds the tests (ON at the top level).
+# ARA_CORE_SWARM_CORE_FROM_PACKAGE=ON takes swarm-core from an installed
+# package (find_package(swarm-core CONFIG), e.g. its vcpkg port) instead of
+# the lock; ARA_CORE_INSTALL=ON (which needs it) adds the install rules and
+# the CMake package ara-core: find_package(ara-core CONFIG REQUIRED) gives the
+# imported target ara::core (swarm-routing/.github#436, the vcpkg port).
+# ARA_CORE_VERSION is the package version (default: .cz.toml's, else 0.0.0).
 cmake_minimum_required(VERSION 3.20)
-project(ara_core LANGUAGES CXX)
+# The package version: .cz.toml's (Commitizen bumps it at each release), or
+# ARA_CORE_VERSION when core/ is built without it (a release tarball, a port).
+set(ARA_CORE_VERSION "" CACHE STRING "ara-core's package version; empty: .cz.toml's")
+if(ARA_CORE_VERSION)
+  set(_ara_core_version "${ARA_CORE_VERSION}")
+elseif(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../.cz.toml")
+  file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/../.cz.toml" _ara_core_version REGEX "^version = " LIMIT_COUNT 1)
+  string(REGEX REPLACE "^version = \"([0-9.]+)\".*" "\\1" _ara_core_version "${_ara_core_version}")
+else()
+  set(_ara_core_version 0.0.0)
+endif()
+project(ara_core VERSION ${_ara_core_version} LANGUAGES CXX)
 
 # The C++ standard of the ns-3 release the org supports: ns-3's own
 # CMAKE_CXX_STANDARD_MINIMUM (C++23 from ns-3.46), the standard swarm-core's
@@ -27,6 +45,17 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(SWARM_CORE_DIR "" CACHE PATH "swarm-core's core/ directory; empty: fetch the release swarm-core.lock names")
 option(ARA_CORE_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  set(_ara_core_top ON)
+else()
+  set(_ara_core_top OFF)
+endif()
+option(ARA_CORE_TESTS "Build the tests and register them with ctest" ${_ara_core_top})
+option(ARA_CORE_SWARM_CORE_FROM_PACKAGE "Take swarm-core from find_package(swarm-core CONFIG), not the lock" OFF)
+option(ARA_CORE_INSTALL "Add the install rules and the CMake package ara-core" OFF)
+if(ARA_CORE_INSTALL AND NOT ARA_CORE_SWARM_CORE_FROM_PACKAGE)
+  message(FATAL_ERROR "ARA_CORE_INSTALL needs ARA_CORE_SWARM_CORE_FROM_PACKAGE=ON: the package links an installed swarm-core")
+endif()
 
 # Sanitizer flags first: they are directory options, so swarm-core's sources,
 # added below, are instrumented too.
@@ -40,7 +69,9 @@ endif()
 # nothing else: no test target, no ctest entry, no -Werror on our sources
 # (swarm-routing/ns3-swarm-core#100; its README "Use core/ from another CMake
 # project").
-if(SWARM_CORE_DIR)
+if(ARA_CORE_SWARM_CORE_FROM_PACKAGE)
+  find_package(swarm-core CONFIG REQUIRED)
+elseif(SWARM_CORE_DIR)
   if(NOT EXISTS "${SWARM_CORE_DIR}/swarm-ports.h")
     message(FATAL_ERROR "SWARM_CORE_DIR=${SWARM_CORE_DIR} is not swarm-core's core/ directory")
   endif()
@@ -88,22 +119,61 @@ add_library(ara_core STATIC
   ara-ant.cc
   ara-router.cc
 )
-target_include_directories(ara_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+add_library(ara::core ALIAS ara_core)
+# The installed package's imported target is ara::core too (EXPORT_NAME and
+# the export's NAMESPACE).
+set_target_properties(ara_core PROPERTIES EXPORT_NAME core)
+include(GNUInstallDirs)
+target_include_directories(ara_core PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/ara-core>)
 target_link_libraries(ara_core PUBLIC swarm::core)
 target_compile_options(ara_core PRIVATE ${ARA_WARNINGS})
 
-add_executable(ara_core_tests
-  test/all-tests.cc
-  test/run-core-tests.cc
-  test/test-ant-codec.cc
-  test/test-failure.cc
-  test/test-maintenance.cc
-  test/test-network.cc
-  test/test-observer.cc
-  test/test-router.cc
-)
-target_link_libraries(ara_core_tests PRIVATE ara_core)
-target_compile_options(ara_core_tests PRIVATE ${ARA_WARNINGS})
+if(ARA_CORE_TESTS)
+  add_executable(ara_core_tests
+    test/all-tests.cc
+    test/run-core-tests.cc
+    test/test-ant-codec.cc
+    test/test-failure.cc
+    test/test-maintenance.cc
+    test/test-network.cc
+    test/test-observer.cc
+    test/test-router.cc
+  )
+  target_link_libraries(ara_core_tests PRIVATE ara_core)
+  target_compile_options(ara_core_tests PRIVATE ${ARA_WARNINGS})
 
-enable_testing()
-add_test(NAME ara-core COMMAND ara_core_tests)
+  enable_testing()
+  add_test(NAME ara-core COMMAND ara_core_tests)
+endif()
+
+if(ARA_CORE_INSTALL)
+  include(CMakePackageConfigHelpers)
+  set(_ara_core_cmake_dir ${CMAKE_INSTALL_LIBDIR}/cmake/ara-core)
+  install(TARGETS ara_core EXPORT ara-coreTargets
+          ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+          LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+  install(FILES
+    ara-ant.h
+    ara-config.h
+    ara-router.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/ara-core)
+  install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/ara-core)
+  install(EXPORT ara-coreTargets NAMESPACE ara:: DESTINATION ${_ara_core_cmake_dir})
+  configure_package_config_file(ara-coreConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/ara-coreConfig.cmake
+    INSTALL_DESTINATION ${_ara_core_cmake_dir})
+  # As swarm-core (its docs/api-policy.md): before 1.0 any minor may break,
+  # so a 0.y release satisfies a request for 0.y only; from 1.0, its major.
+  if(PROJECT_VERSION_MAJOR EQUAL 0)
+    set(_ara_core_compat SameMinorVersion)
+  else()
+    set(_ara_core_compat SameMajorVersion)
+  endif()
+  write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/ara-coreConfigVersion.cmake
+    COMPATIBILITY ${_ara_core_compat})
+  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/ara-coreConfig.cmake
+                ${CMAKE_CURRENT_BINARY_DIR}/ara-coreConfigVersion.cmake
+          DESTINATION ${_ara_core_cmake_dir})
+endif()
