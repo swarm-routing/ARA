@@ -21,7 +21,8 @@ core/       simulator-agnostic algorithm + unit tests (no ns-3 headers; MIT OR G
   ara-config.h    the protocol constants, each citing its docs/fidelity.md row
   ara-router.*    per-node state and decisions (ports in, RouteDecisions out); reports ants sent and received, trail adds and
                   removes, data decisions and the trail table's size to an optional swarm-core IRouterObserver (setObserver)
-  test/           the core tests (plain CMake + ctest; the ns-3 suite runs the same list)
+  test/           the core tests (plain CMake + ctest; the ns-3 suite runs the same list); test/consumer-package/: a find_package(ara-core) consumer
+  ara-coreConfig.cmake.in   the CMake package ara-core (ARA_CORE_INSTALL, with swarm-core from its package: ARA_CORE_SWARM_CORE_FROM_PACKAGE; #167)
 ns3/        contrib module `ara` (GPL-2.0-only), compiling core/ on swarm-core
   model/ara-header.*            AntHeader (core/'s ant codec as an ns3::Header) and DataFlagTag (a data packet's duplicate-error or backtrack flag)
   model/ara-routing-protocol.*  the adapter: one core::Router per node on SwarmRoutingBase; converts and carries out, no constant of its own; core::Config's fields as attributes, with its defaults (#108)
