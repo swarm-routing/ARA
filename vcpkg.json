@@ -6,8 +6,8 @@
   "overrides": [
     {
       "name": "swarm-core",
-      "version": "0.4.0",
-      "port-version": 1
+      "version": "1.0.0",
+      "port-version": 0
     }
   ]
 }
