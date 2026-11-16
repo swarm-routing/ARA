@@ -36,13 +36,14 @@ on):
 git clone https://github.com/swarm-routing/ARA.git
 git clone --branch "$(sed -n 's/^SWARM_CORE_TAG=//p' ARA/swarm-core.lock)" \
     https://github.com/swarm-routing/ns3-swarm-core.git
+# only for the comparison harness ("Run"): ns3-tools at the release ns3.yml names
+git clone --branch "$(sed -n 's#.*routing-bench=swarm-routing/ns3-tools@\(v[^:]*\):.*#\1#p' ARA/.github/workflows/ns3.yml | head -1)" \
+    https://github.com/swarm-routing/ns3-tools.git
 cd ARA
 ```
 
-To run the comparison harness as well (see "Run"), clone
-swarm-routing/ns3-tools next to them too, at the release `ns3.yml` names
-(`git clone --branch v1.0.0 https://github.com/swarm-routing/ns3-tools.git`
-today). There are no submodules.
+All three checkouts sit side by side; the commands below mount them as
+`../ns3-swarm-core` and `../ns3-tools`. There are no submodules.
 
 ## Dependencies
 
@@ -147,6 +148,12 @@ make headers          # licence headers, and core/ includes only the standard li
 make org-sync-check   # the org-managed files match the org templates
 make check            # lint, both test levels, headers and org-sync together
 ```
+
+`make lint`, `make format` and so `make check` call plain `clang-format`
+with no style option: they match CI only when `clang-format` on your `PATH`
+is version 18 and finds the org's style file. Use the two `clang-format-18`
+commands above instead, or link `clang-format` to `clang-format-18` and copy
+the style file to `.clang-format` (not committed) before `make check`.
 
 `make headers` and `make org-sync-check` fetch the org tools into
 `~/.cache/swarm-routing/`.
