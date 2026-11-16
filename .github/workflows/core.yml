@@ -45,7 +45,7 @@ jobs:
           persist-credentials: false
       - name: vcpkg (swarm-routing/.github#489)
         id: vcpkg
-        uses: swarm-routing/.github/.github/actions/setup-vcpkg@claude/vcpkg-consumers
+        uses: swarm-routing/.github/.github/actions/setup-vcpkg@main
         timeout-minutes: 8
         with:
           # The NuGet cache needs mono on the runner (28-50 s to install); the
