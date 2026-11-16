@@ -1,3 +1,19 @@
+## v0.2.1 (2026-11-16)
+
+### Feat
+
+- **core**: take swarm-core from its vcpkg port (manifest mode), the pilot of swarm-routing/.github#489 (#176)
+- **release**: each release opens the ara-core port pr in swarm-routing/vcpkg-registry (#170)
+- **core**: core/ installs as the cmake package ara-core, for its vcpkg port (#168)
+- **core**: build core/ at C++23, the standard of the ns-3 release the org supports (#160)
+- **core**: consume swarm-core by release: swarm-core.lock, URL + URL_HASH, ns-3 dependencies on tags with a canary on main (#159)
+- **bench**: pre-register the q sweep, 0.1 against 0.9 (#142)
+- **ns3**: core::Config's fields as ns-3 attributes, defaults read from the core (#134)
+
+### Fix
+
+- **bench**: check_plan_deps.py reads only plans and cells inside the repository (#131)
+
 ## v0.2.0 (2026-11-13)
 ### Release status
 
