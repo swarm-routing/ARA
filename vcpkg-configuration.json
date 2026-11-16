@@ -8,7 +8,7 @@
     {
       "kind": "git",
       "repository": "https://github.com/swarm-routing/vcpkg-registry",
-      "baseline": "ef52e4f1ccfc4f2f5337284026e10afb8f50c809",
+      "baseline": "5b1c4dd7452740f5f501c6dfe85d2d244b9bdf8a",
       "packages": [
         "swarm-core"
       ]
