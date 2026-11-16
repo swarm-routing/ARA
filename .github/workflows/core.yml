@@ -8,8 +8,8 @@ name: Core
 # org .clang-format. swarm-core's primitives come from its vcpkg port
 # (swarm-routing/.github#489): vcpkg.json pins the version swarm-core.lock
 # names, vcpkg-configuration.json the swarm-routing/vcpkg-registry baseline,
-# and swarm-routing/.github's setup-vcpkg action gives the tool and the binary
-# cache (GitHub Packages, hence `packages: write`). ns3.yml builds the same
+# and swarm-routing/.github's setup-vcpkg action gives the tool (its binary
+# cache on GitHub Packages is off here, see the step). ns3.yml builds the same
 # sources inside ns-3 on the lock's tag. The check name is `core`.
 on:
   push:
@@ -27,7 +27,6 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      packages: write  # the vcpkg binary cache (read-only on a fork PR)
     steps:
       - name: Harden the runner (audit egress)
         uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
@@ -48,6 +47,12 @@ jobs:
         id: vcpkg
         uses: swarm-routing/.github/.github/actions/setup-vcpkg@claude/vcpkg-consumers
         timeout-minutes: 8
+        with:
+          # The NuGet cache needs mono on the runner (28-50 s to install); the
+          # three ports it would restore build in about 5 s, so here it costs
+          # more than it saves (measured on this repository's PR #176,
+          # swarm-routing/.github#489). Turn it on when the ports grow.
+          binary-cache: 'off'
       # one vcpkg_installed for every configure below: the port is installed once
       - name: Build and test (debug, strict warnings; swarm-core from its vcpkg port)
         env:
