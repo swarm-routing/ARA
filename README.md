@@ -72,7 +72,7 @@ What is planned and in progress here: the issues labelled [`epic`](https://githu
 | Epic | Status | Sub-issues closed |
 |------|--------|-------------------|
 | [#3](https://github.com/swarm-routing/ARA/issues/3) ARA as a standalone hexagonal protocol (Phase 3) | In progress | 3 / 6 |
-| [#173](https://github.com/swarm-routing/ARA/issues/173) developer experience: a newcomer can build, test and contribute from the docs alone | Planned | 0 / 1 |
+| [#173](https://github.com/swarm-routing/ARA/issues/173) developer experience: a newcomer can build, test and contribute from the docs alone | Planned | 0 / 2 |
 
 <!-- epics:end -->
 
