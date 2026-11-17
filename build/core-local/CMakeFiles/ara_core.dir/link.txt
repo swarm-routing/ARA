@@ -1,2 +1,0 @@
-/usr/bin/ar qc libara_core.a "CMakeFiles/ara_core.dir/ara-ant.cc.o" "CMakeFiles/ara_core.dir/ara-router.cc.o"
-/usr/bin/ranlib libara_core.a
