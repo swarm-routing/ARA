@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   headers:
-    uses: swarm-routing/.github/.github/workflows/reusable-licence-check.yml@main
+    uses: swarm-routing/.github/.github/workflows/reusable-licence-check.yml@claude/licence-check-go
     with:
       dual-roots: core/ tools/
       core-roots: core/
