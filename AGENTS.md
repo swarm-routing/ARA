@@ -34,7 +34,7 @@ docs/       fidelity sheet (paper section -> implementation), parameters with so
             benchmarks/<version>-anchor.md: each pre-registered anchor's verdict (v0.2.0: misses, written infeasibility verdict)
 results/cells/<generation>/   the raw cells of each pre-registered run, as `ns3-campaign collect` wrote them (GPL-2.0-only data);
                          `ns3-campaign verdicts <plan> --dir results/cells/<generation>` recomputes a page's numbers
-.github/workflows/core.yml   core/ alone: strict warnings, tests, ASan + UBSan, clang-format (check `core`)
+.github/workflows/core.yml   core/ alone: strict warnings, tests, ASan + UBSan, clang-tidy (org .clang-tidy, findings as errors), clang-format (check `core`)
 .github/workflows/ns3.yml    ns3/ in ns3-dev latest debug + sanitized (reusable-ns3-ci.yml; checks `ci / ns-latest debug`, `ci / ns-latest sanitized`, `ci / format`), the smoke and the determinism gate
 .github/workflows/swarm-core-pin.yml   the swarm-core pin is one SHA and current (check `swarm-core / pin`)
 .github/workflows/benchmark-cell.yml   one benchmark cell at a pinned source_sha (reusable-benchmark-cell.yml, build mode); dispatched by ns3-campaign
