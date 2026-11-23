@@ -35,10 +35,10 @@ test: core-test ## the fast tests CI runs on every PR
 CLANG_STYLE = $(if $(wildcard .clang-format),file,file:$(ORG_DIR)/.clang-format)
 
 lint: org-tools ## static checks, no changes
-	git ls-files "*.h" "*.cc" "*.cpp" "*.hpp" | xargs -r clang-format-18 --style=$(CLANG_STYLE) --dry-run --Werror
+	git ls-files "*.h" "*.cc" "*.cpp" "*.hpp" | xargs -r clang-format-18 --style="$(CLANG_STYLE)" --dry-run --Werror
 
 format: org-tools ## apply the formatters
-	git ls-files "*.h" "*.cc" "*.cpp" "*.hpp" | xargs -r clang-format-18 --style=$(CLANG_STYLE) -i
+	git ls-files "*.h" "*.cc" "*.cpp" "*.hpp" | xargs -r clang-format-18 --style="$(CLANG_STYLE)" -i
 
 clean: ## remove build outputs
 	rm -rf build dist
