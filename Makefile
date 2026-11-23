@@ -31,11 +31,14 @@ build: ## build what this repo ships
 test: core-test ## the fast tests CI runs on every PR
 	$(NS3_RUN) --test swarm-core=/src/ns3-swarm-core ara=/src/ara/ns3
 
-lint: ## static checks, no changes
-	git ls-files "*.h" "*.cc" "*.cpp" "*.hpp" | xargs -r clang-format --dry-run --Werror
+# The org .clang-format unless this repo ships its own, as CI's format check.
+CLANG_STYLE = $(if $(wildcard .clang-format),file,file:$(ORG_DIR)/.clang-format)
 
-format: ## apply the formatters
-	git ls-files "*.h" "*.cc" "*.cpp" "*.hpp" | xargs -r clang-format -i
+lint: org-tools ## static checks, no changes
+	git ls-files "*.h" "*.cc" "*.cpp" "*.hpp" | xargs -r clang-format-18 --style=$(CLANG_STYLE) --dry-run --Werror
+
+format: org-tools ## apply the formatters
+	git ls-files "*.h" "*.cc" "*.cpp" "*.hpp" | xargs -r clang-format-18 --style=$(CLANG_STYLE) -i
 
 clean: ## remove build outputs
 	rm -rf build dist
