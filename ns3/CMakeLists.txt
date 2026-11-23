@@ -13,15 +13,22 @@
 # ns3/: core/ is found beside the link's target, not beside the link.
 get_filename_component(ara_ns3_dir "${CMAKE_CURRENT_SOURCE_DIR}" REALPATH)  # CMake < 3.19 too
 get_filename_component(ara_core_dir "${ara_ns3_dir}/../core" ABSOLUTE)
-# core/ includes swarm-core's primitives without the ns3/ prefix (they are the
-# same files as ns3/swarm-*.h), so it builds alone as well.
-set(ara_swarm_core_dir "${PROJECT_SOURCE_DIR}/contrib/swarm-core/core")
+# core/ includes swarm-core's primitives without the ns3/ prefix, so it builds
+# alone as well. The adapter (contrib/swarm-core) either carries them in its
+# own core/ (adapter v1.0.0), added here, or, from
+# swarm-routing/swarm-adapter-ns3#258 on, links the swarm-core release's
+# swarm::core PUBLIC to libswarm-core, whose include directory reaches this
+# module through ${libswarm-core} below.
+set(ara_swarm_core_dir "${PROJECT_SOURCE_DIR}/contrib/swarm-core")
 foreach(d "${ara_core_dir}" "${ara_swarm_core_dir}")
   if(NOT EXISTS "${d}")
     message(FATAL_ERROR "ara: ${d} not found (install swarm-core as contrib/swarm-core)")
   endif()
 endforeach()
-include_directories("${ara_core_dir}" "${ara_swarm_core_dir}")
+include_directories("${ara_core_dir}")
+if(EXISTS "${ara_swarm_core_dir}/core")
+  include_directories("${ara_swarm_core_dir}/core")
+endif()
 
 # The harness arm, only where swarm-routing/ns3-tools' routing-bench is
 # installed and enabled. Its library is named through a variable: ns-3 scans
