@@ -95,7 +95,14 @@ Two versions exist:
   that reads packets from the neighbourhood. [R05] pp. 60–62 summarises the
   same six for the Med-Hoc-Net 2003 paper ("ARA2", Sources; not held). In
   saying what each feature changed, [GS03] says what the 2002 version ("ANT")
-  did where [G02] is silent; the rows below cite it (#27).
+  did where [G02] is silent; the rows below cite it (#27). Where the 2003
+  features stand: the send buffer is the default-off switch
+  `BufferDuringDiscovery` (#5); statistical path selection (#135), flooded
+  BANTs (#136), prioritized ants (#137) and one more try on a failed link
+  (#138) are planned as default-off switches (#125), each named in its row
+  once it lands; continual pheromone decrease is already the default, with
+  no switch (the evaporation row, a stated deviation); and the MAC-Tap gets
+  none, since [GS03] does not specify it (Mechanisms, "MAC-Tap"; #139).
 
 Every row below is the **2002 version** unless it says otherwise. AntHocNet's
 `ara` arm was written from [G02] but took several behaviours that [R05]
@@ -142,6 +149,7 @@ from [G02].
 | Ants share queues with data | [R05] p. 61; [GS03] §4.5 | No priority for ants | as written: [GS03] §4.5 says that in ANT "these packets were handled like ordinary data packets", and makes FANT and BANT priority a 2003 change (#125); [R05] p. 61 reads it the same way. [G02] does not say |
 | Sleep period / sleep mode: a node whose pheromone is below a threshold sleeps and only processes packets addressed to it | [G02] §3.4 | None | not implemented: a power feature, outside the anchor's metrics |
 | Per-node "statistic information block" | [G02] §3.4 | None | not implemented: mentioned once, never defined |
+| MAC-Tap: "extracts information from packets from the neighborhood", passed to the network layer "for further routing decisions" (2003 version) | [GS03] §4.5, §5.2 | None | not implemented: [GS03] names no extracted field, no trigger and no table update, and explains its gain only as "the source node might be able to tune the routing table by collecting information from the neighborhood" (§5.2); any mechanism would be the repo's, not ARA 2003's. Maintainer decision 2026-11-24 on [#139](https://github.com/swarm-routing/ARA/issues/139). The 2003 anchor (#125) runs without it, a stated deviation; [GS03] §5.2 credits it with only "slightly better" delivery on top of the send buffer |
 
 ## Parameters
 
