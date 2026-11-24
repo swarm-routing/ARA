@@ -112,6 +112,8 @@ private:
     bool m_statistical;
     /// The FloodBackwardAnts attribute: core Config floodBackwardAnts (#136).
     bool m_floodBants;
+    /// The OneRetryOnFailure attribute: core Config oneRetryOnFailure (#138).
+    bool m_oneRetry;
     /// The core's constants (core/ara-config.h), one attribute each (#108),
     /// copied into the router's Config by DoInitialize. Their defaults are
     /// core::Config's, read in GetTypeId and in the constructor, never typed

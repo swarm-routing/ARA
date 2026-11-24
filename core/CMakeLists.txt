@@ -140,6 +140,7 @@ if(ARA_CORE_TESTS)
     test/test-maintenance.cc
     test/test-network.cc
     test/test-observer.cc
+    test/test-one-retry.cc
     test/test-router.cc
     test/test-selection.cc
   )

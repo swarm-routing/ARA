@@ -77,6 +77,16 @@ NodeAddress Router::DataHistory::find(const DataKey& key, Time now) const {
     return it->second.hop;
 }
 
+bool Router::DataHistory::tried(const DataKey& key, Time now) const {
+    const auto it = hops_.find(key);
+    return it != hops_.end() && !expired(it->second.at, now, lifetime_) && it->second.tried;
+}
+
+void Router::DataHistory::markTried(const DataKey& key, NodeAddress previousHop, Time now) {
+    record(key, previousHop, now);  // no-op when present and live; bounded as ever
+    if (const auto it = hops_.find(key); it != hops_.end()) it->second.tried = true;
+}
+
 Router::Router(NodeAddress self, const Config& config, swarm::core::IClock& clock,
                swarm::core::IRng& rng, swarm::core::ITimerScheduler& timers, Sink sink)
     : self_(self), config_(config), clock_(clock), rng_(rng), timers_(timers),
@@ -404,10 +414,18 @@ FailureDecision Router::onRouteFailure(const DataKey& key, NodeAddress failed,
     dropTrail(dest, failed);  // fidelity "On a failed link": its ϕ to 0
     // Another link, but not back where the packet came from: unflagged, the
     // previous hop would take it for a loop (DUPLICATE_ERROR) and drop it.
-    NodeAddress prev = dataHistory_.find(key, clock_.now());
+    const Time now = clock_.now();
+    NodeAddress prev = dataHistory_.find(key, now);
     if (prev == kInvalidAddress && cameFrom != self_) prev = cameFrom;
-    if (const NodeAddress hop = bestHopExcept(dest, prev); hop != kInvalidAddress) {
-        return {decided({swarm::core::RouteAction::Unicast, hop, std::nullopt}, dest), false};
+    // With oneRetryOnFailure (#138, [GS03] §4.3: "only one additional try
+    // makes sense"), this node takes one other trail per packet; a second
+    // failure of the same packet here goes on as "no other link".
+    const bool limited = config_.oneRetryOnFailure;
+    if (!(limited && dataHistory_.tried(key, now))) {
+        if (const NodeAddress hop = bestHopExcept(dest, prev); hop != kInvalidAddress) {
+            if (limited) dataHistory_.markTried(key, prev, now);
+            return {decided({swarm::core::RouteAction::Unicast, hop, std::nullopt}, dest), false};
+        }
     }
     // Fidelity "No other link": back to the previous hop (#15), up to the source.
     if (prev != kInvalidAddress) {

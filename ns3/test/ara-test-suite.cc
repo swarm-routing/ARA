@@ -36,6 +36,8 @@
 #include "ns3/ipv4-header.h"
 #include "ns3/ipv4.h"
 #include "ns3/mobility-helper.h"
+#include "ns3/mobility-model.h"
+#include "ns3/neighbor-cache-helper.h"
 #include "ns3/simulator.h"
 #include "ns3/socket.h"
 #include "ns3/string.h"
@@ -212,13 +214,13 @@ private:
 
 constexpr uint16_t kDataPort = 9;
 
-/// Places `nodes` on a line 200 m apart, each reaching only its neighbours
-/// (250 m range), on 802.11b at 2 Mbit/s.
-NetDeviceContainer LineOfWifiNodes(NodeContainer& nodes) {
+/// Places `nodes` at `at`, one position each, with a 250 m range, on 802.11b
+/// at 2 Mbit/s.
+NetDeviceContainer WifiNodesAt(NodeContainer& nodes, const std::vector<Vector>& at) {
     MobilityHelper mobility;
     Ptr<ListPositionAllocator> pos = CreateObject<ListPositionAllocator>();
-    for (uint32_t i = 0; i < nodes.GetN(); ++i)
-        pos->Add(Vector(200.0 * i, 0.0, 0.0));
+    for (const Vector& v : at)
+        pos->Add(v);
     mobility.SetPositionAllocator(pos);
     mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
     mobility.Install(nodes);
@@ -236,6 +238,14 @@ NetDeviceContainer LineOfWifiNodes(NodeContainer& nodes) {
     WifiMacHelper mac;
     mac.SetType("ns3::AdhocWifiMac");
     return wifi.Install(phy, mac, nodes);
+}
+
+/// Places `nodes` on a line 200 m apart, each reaching only its neighbours.
+NetDeviceContainer LineOfWifiNodes(NodeContainer& nodes) {
+    std::vector<Vector> at;
+    for (uint32_t i = 0; i < nodes.GetN(); ++i)
+        at.emplace_back(200.0 * i, 0.0, 0.0);
+    return WifiNodesAt(nodes, at);
 }
 
 /// What one chain run observed.
@@ -774,6 +784,9 @@ private:
         BooleanValue flood;
         p->GetAttribute("FloodBackwardAnts", flood);
         NS_TEST_EXPECT_MSG_EQ(flood.Get(), c.floodBackwardAnts, "FloodBackwardAnts");
+        BooleanValue retry;
+        p->GetAttribute("OneRetryOnFailure", retry);
+        NS_TEST_EXPECT_MSG_EQ(retry.Get(), c.oneRetryOnFailure, "OneRetryOnFailure");
     }
 };
 
@@ -795,6 +808,107 @@ private:
         NS_TEST_EXPECT_MSG_EQ(a.nextHop0, a.expect0, "node 0 routes to node 3 over node 1");
         NS_TEST_EXPECT_MSG_EQ((a.trace == b.trace), true, "seed 1 twice: identical");
     }
+};
+
+/// OneRetryOnFailure (#138) on a real MAC: the source S (10.1.0.1) holds
+/// trails toward D (10.1.0.5) over R1, R2 and R3, strongest first; R1 and R2
+/// leave its range before the packet goes, so both links fail at the MAC
+/// (the neighbour caches are filled, so no ARP stands in the way); only R3
+/// reaches D. Off, S tries R1, R2, then R3 and D receives the packet. On, S
+/// takes one other trail (R2) after R1, and its second failure ends there: no
+/// third try, the packet is dropped and S starts a new discovery.
+class OneRetryOnFailureTestCase : public TestCase {
+public:
+    OneRetryOnFailureTestCase()
+        : TestCase("switch: OneRetryOnFailure, one other trail after a MAC failure, not two "
+                   "(#138)") {}
+
+private:
+    struct Outcome {
+        uint32_t received = 0;
+        uint32_t fantsAfterSend = 0;
+    };
+
+    void DoRun() override {
+        const Outcome off = Run(false);
+        const Outcome on = Run(true);
+        NS_TEST_EXPECT_MSG_EQ(off.received, 1u, "off: R1 and R2 fail, the third trail delivers");
+        NS_TEST_EXPECT_MSG_EQ(off.fantsAfterSend, 0u, "off: no new discovery");
+        NS_TEST_EXPECT_MSG_EQ(on.received, 0u, "on: no third try after two failures");
+        NS_TEST_EXPECT_MSG_GT(on.fantsAfterSend, 0u, "on: the source starts a new discovery");
+    }
+
+    Outcome Run(bool oneRetry) {
+        m_out = Outcome{};
+        SwarmCoreSeed(1);
+        NodeContainer nodes;
+        nodes.Create(5);
+        // S at the centre; R1 east, R2 north, R3 west; D beyond R3 only.
+        NetDeviceContainer devs = WifiNodesAt(
+            nodes, {Vector(0.0, 0.0, 0.0), Vector(200.0, 0.0, 0.0), Vector(0.0, 200.0, 0.0),
+                    Vector(-200.0, 0.0, 0.0), Vector(-400.0, 0.0, 0.0)});
+        SwarmRoutingHelper probe("ns3::aratest::ProbeProtocol");
+        probe.Set("OneRetryOnFailure", BooleanValue(oneRetry));
+        probe.Install(nodes);
+        Ipv4AddressHelper a;
+        a.SetBase("10.1.0.0", "255.255.255.0");
+        Ipv4InterfaceContainer ifs = a.Assign(devs);
+        probe.AssignStreams(nodes, 0);
+        NeighborCacheHelper().PopulateNeighborCache();
+
+        Ptr<ProbeProtocol> s = nodes.Get(0)->GetObject<ProbeProtocol>();
+        Ptr<ProbeProtocol> r3 = nodes.Get(3)->GetObject<ProbeProtocol>();
+        s->TraceConnectWithoutContext("AntTx",
+                                      MakeCallback(&OneRetryOnFailureTestCase::AntTx, this));
+        Ptr<Socket> sink = Socket::CreateSocket(nodes.Get(4), UdpSocketFactory::GetTypeId());
+        sink->Bind(InetSocketAddress(Ipv4Address::GetAny(), kDataPort));
+        sink->SetRecvCallback(MakeCallback(&OneRetryOnFailureTestCase::Receive, this));
+        Ptr<Socket> src = Socket::CreateSocket(nodes.Get(0), UdpSocketFactory::GetTypeId());
+        const Ipv4Address d = ifs.GetAddress(4);
+
+        Simulator::Schedule(Seconds(0.1), [&]() {
+            // FANTs from D (for an absent 10.1.0.99): trails toward D at S
+            // over R1 (phi 1), R2 (1/2) and R3 (1/4); at R3, over D itself.
+            const auto fant = [](uint32_t seq, uint8_t hops) {
+                std::vector<uint8_t> b;
+                ::ara::core::encodeAnt({AntType::Forward, 0x0A010005, 0x0A010063, seq, hops, 35},
+                                       b);
+                return FromBytes(b);
+            };
+            s->Control(fant(1, 0), ifs.GetAddress(1));
+            s->Control(fant(2, 1), ifs.GetAddress(2));
+            s->Control(fant(3, 3), ifs.GetAddress(3));
+            r3->Control(fant(4, 0), d);
+        });
+        Simulator::Schedule(Seconds(0.5), [&]() {
+            nodes.Get(1)->GetObject<MobilityModel>()->SetPosition(Vector(5000.0, 0.0, 0.0));
+            nodes.Get(2)->GetObject<MobilityModel>()->SetPosition(Vector(0.0, 5000.0, 0.0));
+        });
+        Simulator::Schedule(Seconds(1.0), [&]() {
+            m_sending = true;
+            src->SendTo(Create<Packet>(64), 0, InetSocketAddress(d, kDataPort));
+        });
+        Simulator::Stop(Seconds(2.0));
+        Simulator::Run();
+        Simulator::Destroy();
+        m_sending = false;
+        return m_out;
+    }
+
+    void AntTx(uint8_t type, bool broadcast) {
+        if (m_sending && broadcast && type == static_cast<uint8_t>(AntType::Forward)) {
+            ++m_out.fantsAfterSend;
+        }
+    }
+
+    void Receive(Ptr<Socket> socket) {
+        while (socket->Recv()) {
+            ++m_out.received;
+        }
+    }
+
+    Outcome m_out;
+    bool m_sending = false;
 };
 
 /// StatisticalPathSelection on (#135): on the chain each relay has one trail
@@ -906,6 +1020,7 @@ public:
         AddTestCase(new AttributeEffectTestCase, TestCase::Duration::QUICK);
         AddTestCase(new StatisticalSelectionTestCase, TestCase::Duration::QUICK);
         AddTestCase(new FloodBackwardAntsTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new OneRetryOnFailureTestCase, TestCase::Duration::QUICK);
     }
 };
 
