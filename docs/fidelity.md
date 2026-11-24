@@ -95,9 +95,14 @@ Two versions exist:
   that reads packets from the neighbourhood. [R05] pp. 60–62 summarises the
   same six for the Med-Hoc-Net 2003 paper ("ARA2", Sources; not held). In
   saying what each feature changed, [GS03] says what the 2002 version ("ANT")
-  did where [G02] is silent; the rows below cite it (#27). Each 2003 feature
-  comes behind a default-off switch (#125), except the MAC-Tap, which [GS03]
-  does not specify (Mechanisms, "MAC-Tap"; #139).
+  did where [G02] is silent; the rows below cite it (#27). Where the 2003
+  features stand: the send buffer is the default-off switch
+  `BufferDuringDiscovery` (#5); statistical path selection (#135), flooded
+  BANTs (#136), prioritized ants (#137) and one more try on a failed link
+  (#138) are planned as default-off switches (#125), each named in its row
+  once it lands; continual pheromone decrease is already the default, with
+  no switch (the evaporation row, a stated deviation); and the MAC-Tap gets
+  none, since [GS03] does not specify it (Mechanisms, "MAC-Tap"; #139).
 
 Every row below is the **2002 version** unless it says otherwise. AntHocNet's
 `ara` arm was written from [G02] but took several behaviours that [R05]
