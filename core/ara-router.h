@@ -22,7 +22,9 @@
 // for data and how big its trail table is; it only reads, so a run is the same
 // with or without one (org rule 5; test-observer.cc). A slice that adds a
 // control message or a table write reports it through the same helpers. A fixed seed of the injected IRng gives byte-identical behaviour (org
-// rule 5): the only draw is the relay jitter, one uniform() per relayed FANT.
+// rule 5): the draws are the relay jitter, one uniform() per relayed FANT,
+// and, with statisticalPathSelection on (#135), one per data decision that has
+// two or more trails to choose from.
 #ifndef ARA_CORE_ROUTER_H
 #define ARA_CORE_ROUTER_H
 
@@ -33,6 +35,7 @@
 #include "swarm-pheromone-table.h"
 #include "swarm-ports.h"
 #include "swarm-route-decision.h"
+#include "swarm-selection.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -87,11 +90,13 @@ public:
     /// or, with bufferDuringDiscovery and a discovery running, held: Queue.
     AntDecision onLocalData(NodeAddress dest);
 
-    /// A data packet for `dest` that arrived from a neighbour and is not this
-    /// node's own: Deliver when `dest` is this node, else Unicast to the next
-    /// trail or Drop when there is none (no buffering). Like nextHop(), plus
-    /// the report to the observer.
-    AntDecision onTransitData(NodeAddress dest);
+    /// A data packet for `dest` that arrived from the neighbour `prev` and is
+    /// not this node's own: Deliver when `dest` is this node, else Unicast to
+    /// the next trail or Drop when there is none (no buffering). Like
+    /// nextHop(), plus the report to the observer; with
+    /// statisticalPathSelection, a draw over the trails with `prev` left out
+    /// while another exists (kInvalidAddress: none to leave out).
+    AntDecision onTransitData(NodeAddress dest, NodeAddress prev = swarm::core::kInvalidAddress);
 
     /// Route maintenance by data ([G02] §3.2, fidelity "Route maintenance by
     /// data"): this node, the source or a relay, hands a data packet for
@@ -230,6 +235,9 @@ private:
     void reportState();
     AntDecision decided(AntDecision decision, NodeAddress dest);
     NodeAddress bestHop(NodeAddress dest) const;
+    /// The next hop for a data packet: bestHop(), or with
+    /// statisticalPathSelection the ϕ/Σϕ draw without `prev` (#135).
+    NodeAddress dataHop(NodeAddress dest, NodeAddress prev);
     /// bestHop() without the trail over `except`.
     NodeAddress bestHopExcept(NodeAddress dest, NodeAddress except) const;
     void layTrail(NodeAddress toward, NodeAddress over, std::uint8_t hops);
@@ -260,6 +268,8 @@ private:
     std::optional<std::size_t> reportedEntries_;  ///< table size the observer last heard
     /// age()'s scratch: the (destination, neighbour) entries about to expire.
     std::vector<std::pair<NodeAddress, NodeAddress>> expiring_;
+    /// dataHop()'s scratch: the selection weights of one row, reused.
+    std::vector<swarm::core::WeightedHop> weights_;
 };
 
 }  // namespace ara::core

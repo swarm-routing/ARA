@@ -107,6 +107,9 @@ private:
     std::unique_ptr<core::Router> m_router;
     /// The BufferDuringDiscovery attribute: core Config bufferDuringDiscovery.
     bool m_buffer;
+    /// The StatisticalPathSelection attribute: core Config
+    /// statisticalPathSelection (#135).
+    bool m_statistical;
     /// The core's constants (core/ara-config.h), one attribute each (#108),
     /// copied into the router's Config by DoInitialize. Their defaults are
     /// core::Config's, read in GetTypeId and in the constructor, never typed

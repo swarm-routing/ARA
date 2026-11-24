@@ -43,6 +43,14 @@ TypeId RoutingProtocol::GetTypeId() {
                               "dropped, as [G02]).",
                               BooleanValue(d.bufferDuringDiscovery),
                               MakeBooleanAccessor(&RoutingProtocol::m_buffer), MakeBooleanChecker())
+                .AddAttribute("StatisticalPathSelection",
+                              "Data takes neighbour j with probability phi_j / sum phi, the "
+                              "previous hop left out while another trail exists (core Config "
+                              "statisticalPathSelection, [GS03] 2.2 and 5.2, #135; off: the "
+                              "highest phi, as [G02]).",
+                              BooleanValue(d.statisticalPathSelection),
+                              MakeBooleanAccessor(&RoutingProtocol::m_statistical),
+                              MakeBooleanChecker())
                 .AddAttribute("EvaporationRate",
                               "Evaporation rate q of eq. 2, phi := (1 - q) phi per "
                               "EvaporationPeriod, in (0, 1] (core Config evaporationRate).",
@@ -129,6 +137,7 @@ TypeId RoutingProtocol::GetTypeId() {
 // construction: core::Config's (#108).
 RoutingProtocol::RoutingProtocol()
     : m_buffer(core::Config{}.bufferDuringDiscovery),
+      m_statistical(core::Config{}.statisticalPathSelection),
       m_evaporationRate(core::Config{}.evaporationRate),
       m_evaporationPeriod(core::Config{}.evaporationPeriod), m_deposit(core::Config{}.deposit),
       m_expiryThreshold(core::Config{}.expiryThreshold), m_antTtl(core::Config{}.antTtl),
@@ -162,6 +171,7 @@ void RoutingProtocol::DoInitialize() {
     config.pheromoneCapacity = m_pheromoneCapacity;
     config.maxDiscoveries = m_maxDiscoveries;
     config.bufferDuringDiscovery = m_buffer;
+    config.statisticalPathSelection = m_statistical;
     m_router = std::make_unique<core::Router>(
         self, config, m_clock, Rng(), Timers(), [this](const core::AntDecision& d) {
             if (d.message) {
@@ -208,7 +218,9 @@ Ipv4Address RoutingProtocol::SelectNextHop(Ipv4Address dst, Ipv4Address /*src*/,
         return d.action == swarm::core::RouteAction::Unicast ? ToIpv4Address(d.nextHop)
                                                              : Ipv4Address();
     }
-    const core::AntDecision d = m_router->onTransitData(dest);
+    // The previous hop goes with it: with StatisticalPathSelection the draw
+    // leaves it out while another trail exists (#135); off, it is unused.
+    const core::AntDecision d = m_router->onTransitData(dest, ToNodeAddress(prev));
     if (d.action != swarm::core::RouteAction::Unicast) {
         if (m_buffer && p) {
             m_transitNoTrail = p->GetUid();  // dropped, never held (StartDiscovery)
