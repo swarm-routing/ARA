@@ -42,6 +42,8 @@ void TestStatisticalShares(Checker& c);
 void TestStatisticalLeavesOutThePreviousHop(Checker& c);
 void TestStatisticalOffIsUnchanged(Checker& c);
 void TestStatisticalDeterminism(Checker& c);
+void TestFloodedBantOnADiamond(Checker& c);
+void TestFloodedBantRelay(Checker& c);
 
 struct NamedTest {
     const char* name;
