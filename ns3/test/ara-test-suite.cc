@@ -767,6 +767,29 @@ private:
         BooleanValue buffer;
         p->GetAttribute("BufferDuringDiscovery", buffer);
         NS_TEST_EXPECT_MSG_EQ(buffer.Get(), c.bufferDuringDiscovery, "BufferDuringDiscovery");
+        BooleanValue statistical;
+        p->GetAttribute("StatisticalPathSelection", statistical);
+        NS_TEST_EXPECT_MSG_EQ(statistical.Get(), c.statisticalPathSelection,
+                              "StatisticalPathSelection");
+    }
+};
+
+/// StatisticalPathSelection on (#135): on the chain each relay has one trail
+/// forward, so delivery is the default's, and a seed still fixes the run.
+class StatisticalSelectionTestCase : public TestCase {
+public:
+    StatisticalSelectionTestCase()
+        : TestCase(
+              "switch: StatisticalPathSelection delivers on a chain, deterministically (#135)") {}
+
+private:
+    void DoRun() override {
+        const ChainRun a = Chain().With("StatisticalPathSelection", "true").Run(1, 20);
+        const ChainRun b = Chain().With("StatisticalPathSelection", "true").Run(1, 20);
+        NS_TEST_ASSERT_MSG_EQ(a.sent, 20u, "packets sent");
+        NS_TEST_EXPECT_MSG_EQ(a.received, 19u, "every packet after the discovery delivered");
+        NS_TEST_EXPECT_MSG_EQ(a.nextHop0, a.expect0, "nextHop() stays the highest phi");
+        NS_TEST_EXPECT_MSG_EQ((a.trace == b.trace), true, "seed 1 twice: identical");
     }
 };
 
@@ -809,6 +832,7 @@ public:
         AddTestCase(new AdapterGuardsTestCase, TestCase::Duration::QUICK);
         AddTestCase(new AttributeDefaultsTestCase, TestCase::Duration::QUICK);
         AddTestCase(new AttributeEffectTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new StatisticalSelectionTestCase, TestCase::Duration::QUICK);
     }
 };
 

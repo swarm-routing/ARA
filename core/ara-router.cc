@@ -172,6 +172,20 @@ NodeAddress Router::bestHop(NodeAddress dest) const {
     return table_.bestEntry(dest).neighbor;
 }
 
+// The same row, with statisticalPathSelection on (#135): [GS03] §2.2's
+// transition rule, ϕ(d, j) / Σ ϕ(d, k), which §5.2 calls statistical path
+// selection. Weights (ϕ / ϕ_max)^1 are proportional to ϕ, in ascending
+// neighbour order (deterministic); `prev` is left out unless it is the only
+// trail (swarm-core's selectionWeights). One rng_.uniform(), in
+// rouletteSelect, and only when two or more trails remain (org rule 5).
+NodeAddress Router::dataHop(NodeAddress dest, NodeAddress prev) {
+    if (!config_.statisticalPathSelection) return bestHop(dest);
+    const auto weights = swarm::core::selectionWeights(table_, dest, 1.0, weights_, prev);
+    if (weights.empty()) return kInvalidAddress;
+    if (weights.size() == 1) return weights.front().node;
+    return swarm::core::rouletteSelect(weights, rng_);
+}
+
 // Fidelity "A node seeing a FANT for the first time records ...": ϕ raised to
 // at least 1/hops (#4); the BANT does the same toward the destination.
 void Router::layTrail(NodeAddress toward, NodeAddress over, std::uint8_t hops) {
@@ -208,10 +222,10 @@ double Router::pheromone(NodeAddress dest, NodeAddress neighbor) {
     return table_.get(dest, neighbor);
 }
 
-AntDecision Router::onTransitData(NodeAddress dest) {
+AntDecision Router::onTransitData(NodeAddress dest, NodeAddress prev) {
     if (dest == self_) return decided(AntDecision::deliver(), dest);
     age();
-    const NodeAddress hop = bestHop(dest);
+    const NodeAddress hop = dataHop(dest, prev);
     if (hop != kInvalidAddress) {
         return decided({swarm::core::RouteAction::Unicast, hop, std::nullopt}, dest);
     }
@@ -221,7 +235,7 @@ AntDecision Router::onTransitData(NodeAddress dest) {
 AntDecision Router::onLocalData(NodeAddress dest) {
     if (dest == self_) return decided(AntDecision::deliver(), dest);
     age();
-    const NodeAddress hop = bestHop(dest);
+    const NodeAddress hop = dataHop(dest, kInvalidAddress);  // the source: no previous hop
     if (hop != kInvalidAddress) {
         return decided({swarm::core::RouteAction::Unicast, hop, std::nullopt}, dest);
     }

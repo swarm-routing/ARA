@@ -63,6 +63,14 @@ struct Config {
     /// DiscardPending through the sink). The adapter's queue bounds them (org
     /// rule 7).
     bool bufferDuringDiscovery = false;
+    /// Fidelity "Next-hop choice for data among the trails": off, the highest
+    /// ϕ, as [G02] (#15). On (a repo switch, #135; the reading accepted by the
+    /// maintainer 2026-11-24), data takes neighbour j with probability
+    /// ϕ(d, j) / Σ ϕ(d, k), the statistical path selection of [GS03] §2.2 and
+    /// §5.2; at a relay the hop the packet came from is left out while another
+    /// trail exists (a repo choice; [GS03] is silent). Ants, nextHop() and the
+    /// route-failure alternative stay deterministic.
+    bool statisticalPathSelection = false;
 };
 
 }  // namespace ara::core

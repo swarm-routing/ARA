@@ -38,6 +38,10 @@ void TestFailureTakesAnotherLink(Checker& c);
 void TestFailureBacktracks(Checker& c);
 void TestFailureAtSourceRediscovers(Checker& c);
 void TestBacktrackOnADiamond(Checker& c);
+void TestStatisticalShares(Checker& c);
+void TestStatisticalLeavesOutThePreviousHop(Checker& c);
+void TestStatisticalOffIsUnchanged(Checker& c);
+void TestStatisticalDeterminism(Checker& c);
 
 struct NamedTest {
     const char* name;
