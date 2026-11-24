@@ -51,6 +51,13 @@ TypeId RoutingProtocol::GetTypeId() {
                               BooleanValue(d.statisticalPathSelection),
                               MakeBooleanAccessor(&RoutingProtocol::m_statistical),
                               MakeBooleanChecker())
+                .AddAttribute("FloodBackwardAnts",
+                              "The destination broadcasts its BANT and every node relays it once, "
+                              "jittered, like a FANT (core Config floodBackwardAnts, [GS03] 4.5, "
+                              "#136; off: unicast back along the FANT's path, as [G02]).",
+                              BooleanValue(d.floodBackwardAnts),
+                              MakeBooleanAccessor(&RoutingProtocol::m_floodBants),
+                              MakeBooleanChecker())
                 .AddAttribute("EvaporationRate",
                               "Evaporation rate q of eq. 2, phi := (1 - q) phi per "
                               "EvaporationPeriod, in (0, 1] (core Config evaporationRate).",
@@ -138,6 +145,7 @@ TypeId RoutingProtocol::GetTypeId() {
 RoutingProtocol::RoutingProtocol()
     : m_buffer(core::Config{}.bufferDuringDiscovery),
       m_statistical(core::Config{}.statisticalPathSelection),
+      m_floodBants(core::Config{}.floodBackwardAnts),
       m_evaporationRate(core::Config{}.evaporationRate),
       m_evaporationPeriod(core::Config{}.evaporationPeriod), m_deposit(core::Config{}.deposit),
       m_expiryThreshold(core::Config{}.expiryThreshold), m_antTtl(core::Config{}.antTtl),
@@ -172,6 +180,7 @@ void RoutingProtocol::DoInitialize() {
     config.maxDiscoveries = m_maxDiscoveries;
     config.bufferDuringDiscovery = m_buffer;
     config.statisticalPathSelection = m_statistical;
+    config.floodBackwardAnts = m_floodBants;
     m_router = std::make_unique<core::Router>(
         self, config, m_clock, Rng(), Timers(), [this](const core::AntDecision& d) {
             if (d.message) {

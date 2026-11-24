@@ -771,6 +771,29 @@ private:
         p->GetAttribute("StatisticalPathSelection", statistical);
         NS_TEST_EXPECT_MSG_EQ(statistical.Get(), c.statisticalPathSelection,
                               "StatisticalPathSelection");
+        BooleanValue flood;
+        p->GetAttribute("FloodBackwardAnts", flood);
+        NS_TEST_EXPECT_MSG_EQ(flood.Get(), c.floodBackwardAnts, "FloodBackwardAnts");
+    }
+};
+
+/// FloodBackwardAnts on (#136): on the chain every node relays the BANT once
+/// as a broadcast (the unicast path sends one BANT per hop as well), the
+/// discovery completes, and a seed still fixes the run.
+class FloodBackwardAntsTestCase : public TestCase {
+public:
+    FloodBackwardAntsTestCase()
+        : TestCase("switch: FloodBackwardAnts delivers on a chain, deterministically (#136)") {}
+
+private:
+    void DoRun() override {
+        const ChainRun a = Chain().With("FloodBackwardAnts", "true").Run(1, 20);
+        const ChainRun b = Chain().With("FloodBackwardAnts", "true").Run(1, 20);
+        NS_TEST_ASSERT_MSG_EQ(a.sent, 20u, "packets sent");
+        NS_TEST_EXPECT_MSG_GT(a.bants, 0u, "BANTs flooded");
+        NS_TEST_EXPECT_MSG_EQ(a.received, 19u, "every packet after the discovery delivered");
+        NS_TEST_EXPECT_MSG_EQ(a.nextHop0, a.expect0, "node 0 routes to node 3 over node 1");
+        NS_TEST_EXPECT_MSG_EQ((a.trace == b.trace), true, "seed 1 twice: identical");
     }
 };
 
@@ -882,6 +905,7 @@ public:
         AddTestCase(new AttributeDefaultsTestCase, TestCase::Duration::QUICK);
         AddTestCase(new AttributeEffectTestCase, TestCase::Duration::QUICK);
         AddTestCase(new StatisticalSelectionTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new FloodBackwardAntsTestCase, TestCase::Duration::QUICK);
     }
 };
 

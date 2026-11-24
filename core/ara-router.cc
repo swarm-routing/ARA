@@ -278,7 +278,13 @@ void Router::onForwardAnt(const AntMessage& ant, NodeAddress from) {
         // Fidelity "Destination destroys the FANT and answers with a BANT",
         // unicast back along the FANT's path ("How the BANT travels back").
         AntMessage bant{AntType::Backward, self_, ant.source, ant.sequence, 0, config_.antTtl};
-        emit(AntDecision::unicast(from, bant));
+        // With floodBackwardAnts (#136), "flooded from the target" ([GS03]
+        // §4.5): broadcast, unjittered, as a source sends its FANT.
+        if (config_.floodBackwardAnts) {
+            emit(AntDecision::broadcast(bant));
+        } else {
+            emit(AntDecision::unicast(from, bant));
+        }
         return;
     }
     if (ant.ttl <= 1) return;  // fidelity "FANT maximum hops / TTL"
@@ -305,6 +311,21 @@ void Router::onBackwardAnt(const AntMessage& ant, NodeAddress from) {
     if (ant.destination == self_) {
         // Fidelity "Data may be sent once the source receives the BANT".
         discoveries_.erase(ant.source);
+        return;
+    }
+    if (config_.floodBackwardAnts) {
+        // Fidelity "How the BANT travels back", the switch (#136): relayed
+        // like a FANT, a jittered broadcast, so nodes off the FANT's reverse
+        // path also lay the trail. bantHistory_ above lets each node relay a
+        // given BANT once; the TTL bounds it besides. Reverse pointers are
+        // still recorded with the FANT, and not read here.
+        if (ant.ttl <= 1) return;
+        AntMessage relay = ant;
+        relay.hops = hops;
+        relay.ttl = static_cast<std::uint8_t>(ant.ttl - 1);
+        const double draw = rng_.uniform();
+        const Time delay = draw * config_.relayJitterMax;
+        timers_.schedule(delay, [this, relay] { emit(AntDecision::broadcast(relay)); });
         return;
     }
     const NodeAddress back = reverse_.find(ant.destination, ant.sequence, clock_.now());

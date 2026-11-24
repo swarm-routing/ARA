@@ -71,6 +71,15 @@ struct Config {
     /// trail exists (a repo choice; [GS03] is silent). Ants, nextHop() and the
     /// route-failure alternative stay deterministic.
     bool statisticalPathSelection = false;
+    /// Fidelity "How the BANT travels back": off, unicast back along the
+    /// FANT's path, as [G02] (#15; [GS03] §4.5 confirms it for 2002). On (a
+    /// repo switch, #136; the reading accepted by the maintainer 2026-11-24),
+    /// a BANT is relayed like a FANT ([GS03] §4.5, "flooded from the target to
+    /// the source node similar to the FANT"): the destination broadcasts it,
+    /// and each node relays it once per discovery as a broadcast with TTL − 1
+    /// after U[0, relayJitterMax); the trail and the duplicate rule are
+    /// unchanged.
+    bool floodBackwardAnts = false;
 };
 
 }  // namespace ara::core

@@ -10,7 +10,7 @@ namespace ara::core::test {
 
 namespace {
 
-constexpr std::array<NamedTest, 30> kTests{{
+constexpr std::array<NamedTest, 32> kTests{{
     {"ant codec: roundtrip", TestAntRoundtrip},
     {"ant codec: the decoder fails closed", TestAntDecoderFailsClosed},
     {"ant codec: seeded fuzz", TestAntFuzz},
@@ -45,6 +45,8 @@ constexpr std::array<NamedTest, 30> kTests{{
     {"statistical selection (switch): off by default, decisions and draws unchanged",
      TestStatisticalOffIsUnchanged},
     {"statistical selection (switch): same seed, same choices", TestStatisticalDeterminism},
+    {"flooded BANT (switch): both relays of a diamond lay the trail", TestFloodedBantOnADiamond},
+    {"flooded BANT (switch): jittered broadcast, duplicates, TTL, its ends", TestFloodedBantRelay},
 }};
 
 }  // namespace

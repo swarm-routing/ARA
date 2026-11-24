@@ -22,9 +22,10 @@
 // for data and how big its trail table is; it only reads, so a run is the same
 // with or without one (org rule 5; test-observer.cc). A slice that adds a
 // control message or a table write reports it through the same helpers. A fixed seed of the injected IRng gives byte-identical behaviour (org
-// rule 5): the draws are the relay jitter, one uniform() per relayed FANT,
-// and, with statisticalPathSelection on (#135), one per data decision that has
-// two or more trails to choose from.
+// rule 5): the draws are the relay jitter, one uniform() per relayed FANT
+// (and, with floodBackwardAnts on, #136, per relayed BANT), and, with
+// statisticalPathSelection on (#135), one per data decision that has two or
+// more trails to choose from.
 #ifndef ARA_CORE_ROUTER_H
 #define ARA_CORE_ROUTER_H
 
