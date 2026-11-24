@@ -33,22 +33,23 @@ AntMessage bantMsg(NodeAddress src, NodeAddress dst, std::uint32_t seq, std::uin
     return {AntType::Backward, src, dst, seq, hops, ttl};
 }
 
-/// The diamond 1 - {2, 3} - 4, a discovery from 1 for 4, run to quiet.
-Network diamond(Config config) {
-    Network n(1, config);
+/// Builds the diamond 1 - {2, 3} - 4 in `n` and runs a discovery from 1 for 4
+/// to quiet. `n` is the caller's: a Network must not move, since its routers
+/// hold references to its clock, scheduler and RNG.
+void runDiamond(Network& n) {
     n.addLink(1, 2);
     n.addLink(1, 3);
     n.addLink(2, 4);
     n.addLink(3, 4);
     n.node(1).onLocalData(4);
     n.events().runUntil(1.0);
-    return n;
 }
 
 }  // namespace
 
 void TestFloodedBantOnADiamond(Checker& c) {
-    Network on = diamond(flooding());
+    Network on(1, flooding());
+    runDiamond(on);
     c.check(on.node(2).pheromone(4, 4) > 0.0 && on.node(3).pheromone(4, 4) > 0.0,
             "switch on: both relays lay a trail toward the destination");
     c.check(!on.node(1).discovering(4) && on.node(1).nextHop(4) != kInvalidAddress,
@@ -57,7 +58,8 @@ void TestFloodedBantOnADiamond(Checker& c) {
     // the BANT's end, relays nothing, and the destination drops the echoes.
     c.check(on.sent(AntType::Backward) == 3, "one BANT per node but the source");
 
-    Network off = diamond(Config{});
+    Network off(1, Config{});
+    runDiamond(off);
     const int trails =
         (off.node(2).pheromone(4, 4) > 0.0 ? 1 : 0) + (off.node(3).pheromone(4, 4) > 0.0 ? 1 : 0);
     c.check(trails == 1, "switch off: only the FANT's reverse-path relay lays it");
