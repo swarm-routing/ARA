@@ -118,7 +118,7 @@ attributes) changed nothing on the default path, over 20 seeds × 2 protocols
 
 ## What follows
 
-- **Decision.** The maintainer decides on #140 whether the default moves. The
-  recommendation there: keep 0.1.
+- **Decision.** The default stays 0.1 (maintainer decision 2026-11-24 on
+  #140, accepting the recommendation there).
 - **Next A/Bs.** #125's A/Bs and the 2003 anchor use q = 0.1, as #125's
   recommendations planned once this sweep was read.
