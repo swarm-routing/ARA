@@ -790,6 +790,55 @@ private:
         NS_TEST_EXPECT_MSG_EQ(a.received, 19u, "every packet after the discovery delivered");
         NS_TEST_EXPECT_MSG_EQ(a.nextHop0, a.expect0, "nextHop() stays the highest phi");
         NS_TEST_EXPECT_MSG_EQ((a.trace == b.trace), true, "seed 1 twice: identical");
+
+        // Two trails toward one destination: the attribute reaches the core,
+        // and the adapter hands it the previous hop.
+        const Ipv4Address strong("10.1.0.2");  // phi 1
+        const Ipv4Address weak("10.1.0.3");    // phi 0.5
+        NS_TEST_EXPECT_MSG_EQ(TwoTrails(false, strong), strong,
+                              "off: the highest phi, though it is the previous hop");
+        NS_TEST_EXPECT_MSG_EQ(TwoTrails(true, strong), weak,
+                              "on: the previous hop is left out, the other trail taken");
+    }
+
+    /// Node 0 of two probes gets trails toward 10.1.0.99 over `strong` (phi 1)
+    /// and 10.1.0.3 (phi 0.5) from two FANTs, then selects a next hop for
+    /// transit data that arrived from `prev`, ten times; returns the hop if
+    /// all ten agree, else 0.0.0.0.
+    Ipv4Address TwoTrails(bool statistical, Ipv4Address prev) {
+        SwarmCoreSeed(1);
+        NodeContainer nodes;
+        nodes.Create(2);
+        NetDeviceContainer devs = LineOfWifiNodes(nodes);
+        SwarmRoutingHelper probe("ns3::aratest::ProbeProtocol");
+        probe.Set("StatisticalPathSelection", BooleanValue(statistical));
+        probe.Install(nodes);
+        Ipv4AddressHelper a;
+        a.SetBase("10.1.0.0", "255.255.255.0");
+        a.Assign(devs);
+        probe.AssignStreams(nodes, 0);
+        Ptr<ProbeProtocol> p0 = nodes.Get(0)->GetObject<ProbeProtocol>();
+        const Ipv4Address far("10.1.0.99");
+        Ipv4Address chosen("0.0.0.0");
+        Simulator::Schedule(Seconds(0.5), [&]() {
+            std::vector<uint8_t> f1;
+            std::vector<uint8_t> f2;
+            ::ara::core::encodeAnt({AntType::Forward, 0x0A010063, 0x0A010064, 1, 0, 35}, f1);
+            ::ara::core::encodeAnt({AntType::Forward, 0x0A010063, 0x0A010064, 2, 1, 35}, f2);
+            p0->Control(FromBytes(f1), Ipv4Address("10.1.0.2"));
+            p0->Control(FromBytes(f2), Ipv4Address("10.1.0.3"));
+            chosen = p0->Select(far, prev);
+            for (int i = 0; i < 9; ++i) {
+                if (p0->Select(far, prev) != chosen) {
+                    chosen = Ipv4Address("0.0.0.0");
+                    break;
+                }
+            }
+        });
+        Simulator::Stop(Seconds(1.0));
+        Simulator::Run();
+        Simulator::Destroy();
+        return chosen;
     }
 };
 
