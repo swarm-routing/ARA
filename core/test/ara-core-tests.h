@@ -44,6 +44,8 @@ void TestStatisticalOffIsUnchanged(Checker& c);
 void TestStatisticalDeterminism(Checker& c);
 void TestFloodedBantOnADiamond(Checker& c);
 void TestFloodedBantRelay(Checker& c);
+void TestOneRetryAtARelay(Checker& c);
+void TestOneRetryAtTheSourceAndEviction(Checker& c);
 
 struct NamedTest {
     const char* name;

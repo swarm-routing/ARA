@@ -58,6 +58,14 @@ TypeId RoutingProtocol::GetTypeId() {
                               BooleanValue(d.floodBackwardAnts),
                               MakeBooleanAccessor(&RoutingProtocol::m_floodBants),
                               MakeBooleanChecker())
+                .AddAttribute("OneRetryOnFailure",
+                              "A node takes one other trail per packet whose link failed; a "
+                              "second failure there goes back to the previous hop (core Config "
+                              "oneRetryOnFailure, [GS03] 4.3, #138; off: every failure takes the "
+                              "next trail, as [G02]).",
+                              BooleanValue(d.oneRetryOnFailure),
+                              MakeBooleanAccessor(&RoutingProtocol::m_oneRetry),
+                              MakeBooleanChecker())
                 .AddAttribute("EvaporationRate",
                               "Evaporation rate q of eq. 2, phi := (1 - q) phi per "
                               "EvaporationPeriod, in (0, 1] (core Config evaporationRate).",
@@ -145,7 +153,7 @@ TypeId RoutingProtocol::GetTypeId() {
 RoutingProtocol::RoutingProtocol()
     : m_buffer(core::Config{}.bufferDuringDiscovery),
       m_statistical(core::Config{}.statisticalPathSelection),
-      m_floodBants(core::Config{}.floodBackwardAnts),
+      m_floodBants(core::Config{}.floodBackwardAnts), m_oneRetry(core::Config{}.oneRetryOnFailure),
       m_evaporationRate(core::Config{}.evaporationRate),
       m_evaporationPeriod(core::Config{}.evaporationPeriod), m_deposit(core::Config{}.deposit),
       m_expiryThreshold(core::Config{}.expiryThreshold), m_antTtl(core::Config{}.antTtl),
@@ -181,6 +189,7 @@ void RoutingProtocol::DoInitialize() {
     config.bufferDuringDiscovery = m_buffer;
     config.statisticalPathSelection = m_statistical;
     config.floodBackwardAnts = m_floodBants;
+    config.oneRetryOnFailure = m_oneRetry;
     m_router = std::make_unique<core::Router>(
         self, config, m_clock, Rng(), Timers(), [this](const core::AntDecision& d) {
             if (d.message) {

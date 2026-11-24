@@ -182,6 +182,9 @@ private:
     struct TimedHop {
         NodeAddress hop;
         Time at;
+        /// Data history only, with oneRetryOnFailure (#138): this node has
+        /// already taken its one other trail for this packet.
+        bool tried = false;
     };
 
     /// (FANT source, sequence) -> the neighbour the FANT came from: the path
@@ -216,6 +219,12 @@ private:
         /// The hop `key` came from; kInvalidAddress when unknown, expired at
         /// `now` or originated here.
         NodeAddress find(const DataKey& key, Time now) const;
+        /// True when this node already took its one other trail for `key`
+        /// (#138); false when unknown or expired at `now`.
+        bool tried(const DataKey& key, Time now) const;
+        /// Marks `key` tried, recording it first, with `previousHop`, when it
+        /// is unknown or expired (a source's own packet has no entry).
+        void markTried(const DataKey& key, NodeAddress previousHop, Time now);
         std::size_t size() const { return hops_.size(); }
 
     private:

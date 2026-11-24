@@ -80,6 +80,15 @@ struct Config {
     /// after U[0, relayJitterMax); the trail and the duplicate rule are
     /// unchanged.
     bool floodBackwardAnts = false;
+    /// Fidelity "On a failed link": off, every failure of a packet at a node
+    /// takes the next other trail, as [G02] §3.3. On (a repo switch, #138; the
+    /// reading accepted by the maintainer 2026-11-24), a node takes one other
+    /// trail per packet ([GS03] §4.3, "only one additional try makes sense");
+    /// a second failure of the same packet there goes back to the previous
+    /// hop, flagged, as "No other link", up to the source. The mark lives on
+    /// the packet's data-history entry (bounded, expiring), created for a
+    /// source's own packet.
+    bool oneRetryOnFailure = false;
 };
 
 }  // namespace ara::core

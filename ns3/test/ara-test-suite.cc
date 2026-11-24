@@ -774,6 +774,9 @@ private:
         BooleanValue flood;
         p->GetAttribute("FloodBackwardAnts", flood);
         NS_TEST_EXPECT_MSG_EQ(flood.Get(), c.floodBackwardAnts, "FloodBackwardAnts");
+        BooleanValue retry;
+        p->GetAttribute("OneRetryOnFailure", retry);
+        NS_TEST_EXPECT_MSG_EQ(retry.Get(), c.oneRetryOnFailure, "OneRetryOnFailure");
     }
 };
 
