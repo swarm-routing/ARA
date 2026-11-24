@@ -9,7 +9,7 @@
 # 093b42c (#134 merged: core::Config's fields as ns-3 attributes), two arms that
 # differ only in EvaporationRate; identical seeds; on ns3-dev 3.48-optimized
 # (fb7596b) by digest, the anchor's image (ns-3.49's AODV livelocks,
-# swarm-routing/ns3-containers#35).
+# swarm-routing/sim-containers#35).
 #
 # Cells: the anchor's two gated cells (anchor-3.yaml's field at pause 0 and
 # 30 s, 900 s, 20 seeds in two blocks of 10) and the two families of smoke.yaml

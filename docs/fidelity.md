@@ -213,7 +213,7 @@ rule committed) before dispatch.
 
 Reproducibility with the org's arms: AODV is a stock ns-3 arm in `ns3-tools`'
 `routing-bench`. Its check currently runs on `ns3-dev:3.48` because ns-3.49's
-AODV livelocks (ns3-containers#35), so the anchor run pins 3.48 until that is
+AODV livelocks (swarm-routing/sim-containers#35), so the anchor run pins 3.48 until that is
 fixed (v2.5.0 ran on 3.42). NRL in the harness counts routing packets per
 delivered data packet at the IP layer: a ratio, where [G02] Fig. 8 plots the
 total number of routing packets. The NRL gate alone therefore does not

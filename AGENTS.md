@@ -164,7 +164,7 @@ pass rule of `docs/fidelity.md` "Anchor candidate" (ARA minus AODV, paired by
 seed; PDR CI above zero at pause 0 and 30 s, NRL CI below zero at pause 0; 120
 and 600 s reported), ARA and AODV in one `routing-compare` invocation per
 seed, 20 seeds per cell in two blocks of 10, on ns3-dev 3.48-optimized by
-digest (ns-3.49's AODV livelocks, swarm-routing/ns3-containers#35),
+digest (ns-3.49's AODV livelocks, swarm-routing/sim-containers#35),
 pre-registered at `source_sha` 71d2166 (the commit that merges #113, the
 swarm-core pin bump to 6966421, so with the 30 s history lifetime of #111),
 swarm-core 6966421 and routing-bench 3d279b8 (maintainer decision 2026-11-13:
