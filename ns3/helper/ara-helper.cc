@@ -10,6 +10,7 @@
 #include "ns3/string.h"
 #include "ns3/traffic-control-helper.h"
 #include "ns3/traffic-control-layer.h"
+#include "ns3/uinteger.h"
 
 namespace ns3 {
 
@@ -50,15 +51,23 @@ uint32_t InstallAntPriority(const NodeContainer& nodes) {
     // #137: band 0 for ants (priority 7, ara::kAntPriority, the priomap) and for
     // data flagged Backtrack or DuplicateError (ara::DataFlagFilter); band 1
     // for the rest. Each band an FqCoDelQueueDisc with ns-3's defaults, the
-    // default root queue disc Ipv4AddressHelper::Assign would install.
-    TrafficControlHelper tch;
-    const uint16_t root = tch.SetRootQueueDisc("ns3::PrioQueueDisc", "Priomap",
-                                               StringValue("1 1 1 1 1 1 1 0 1 1 1 1 1 1 1 1"));
-    const TrafficControlHelper::ClassIdList bands =
-        tch.AddQueueDiscClasses(root, 2, "ns3::QueueDiscClass");
-    tch.AddChildQueueDisc(root, bands[0], "ns3::FqCoDelQueueDisc");
-    tch.AddChildQueueDisc(root, bands[1], "ns3::FqCoDelQueueDisc");
-    tch.AddPacketFilter(root, "ns3::ara::DataFlagFilter");
+    // default root queue disc Ipv4AddressHelper::Assign would install, but
+    // for its quantum: a root FqCoDel reads the device's MTU through the
+    // device's queue interface, which a child does not have, so the child is
+    // given that MTU here (else its CheckConfig fails).
+    const auto installOn = [](Ptr<NetDevice> dev) {
+        TrafficControlHelper tch;
+        const uint16_t root = tch.SetRootQueueDisc("ns3::PrioQueueDisc", "Priomap",
+                                                   StringValue("1 1 1 1 1 1 1 0 1 1 1 1 1 1 1 1"));
+        const TrafficControlHelper::ClassIdList bands =
+            tch.AddQueueDiscClasses(root, 2, "ns3::QueueDiscClass");
+        for (const uint16_t band : bands) {
+            tch.AddChildQueueDisc(root, band, "ns3::FqCoDelQueueDisc", "Quantum",
+                                  UintegerValue(dev->GetMtu()));
+        }
+        tch.AddPacketFilter(root, "ns3::ara::DataFlagFilter");
+        tch.Install(dev);
+    };
 
     uint32_t installed = 0;
     for (auto it = nodes.Begin(); it != nodes.End(); ++it) {
@@ -69,7 +78,7 @@ uint32_t InstallAntPriority(const NodeContainer& nodes) {
             Ptr<NetDevice> dev = (*it)->GetDevice(d);
             if (DynamicCast<LoopbackNetDevice>(dev)) continue;
             if (tc && tc->GetRootQueueDiscOnDevice(dev)) continue;  // one already chosen
-            tch.Install(dev);
+            installOn(dev);
             ++installed;
         }
     }
