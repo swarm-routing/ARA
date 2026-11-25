@@ -147,7 +147,8 @@ Before a dispatch, the plan and that file must already agree (#105):
 `python3 -I tools/bench/check_plan_deps.py P.yaml` reads `benchmark-cell.yml`
 at the plan's dispatch ref and fails unless every
 `source_sha` pins the swarm-core commit the cells would build
-(`swarm-core.lock`'s, or `SWARM_CORE_REF` at a commit from before the lock), and the plan names each dependency as `<name>@<commit>`
+(`swarm-core.lock`'s, or `SWARM_CORE_REF` at a commit from before the lock; when the workflow
+builds swarm-adapter-ns3, the swarm-core its own `swarm-core.lock` names at that commit, #220), and the plan names each dependency as `<name>@<commit>`
 (swarm-core and routing-bench) with the commits the workflow builds. Run it
 when a plan is pre-registered and again right before `dispatch`; if a pin bump
 merged in between, the plan is stale: pre-register a new one (new
