@@ -1,0 +1,52 @@
+# Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
+# SPDX-License-Identifier: GPL-2.0-only
+name: Campaign tag
+run-name: campaign/${{ inputs.generation }}
+
+# Freezes a campaign's dispatch ref (#288): tags the commit `ref` names now as
+# `campaign/<generation>`, the tag `ns3-campaign dispatch` creates for a plan
+# with `freeze: true` (swarm-routing/sim-tools change_plan.py `frozen_ref`).
+# A session whose token may not create tags dispatches this first; the plan's
+# first `dispatch` then finds the tag at the commit its `ref` names and adopts
+# it, so every cell of the campaign runs benchmark-cell.yml as it was at that
+# commit, whatever merges on `ref` meanwhile. If `ref` moved between the two
+# steps, `dispatch` refuses the tag: pre-register a new generation.
+#
+# workflow_dispatch only; the one job may write refs and nothing else. Only
+# `refs/tags/campaign/*` is written: the release-tags ruleset guards `v*`, and
+# an existing tag is never moved (the create fails).
+on:
+  workflow_dispatch:
+    inputs:
+      generation:
+        description: 'The plan''s generation ([A-Za-z0-9][A-Za-z0-9._-]*): the tag is campaign/<generation>'
+        required: true
+      ref:
+        description: 'The plan''s ref (the branch its cells are dispatched at)'
+        default: main
+
+permissions: {}
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Tag the commit the ref names
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          GENERATION: ${{ inputs.generation }}
+          REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$GENERATION" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+            echo "::error::generation '$GENERATION' cannot name a tag"
+            exit 1
+          fi
+          sha=$(gh api "repos/$REPO/commits/$REF" --jq .sha)
+          gh api -X POST "repos/$REPO/git/refs" \
+            -f ref="refs/tags/campaign/$GENERATION" -f sha="$sha" --jq .ref
+          echo "campaign/$GENERATION = $sha ($REF)" >> "$GITHUB_STEP_SUMMARY"
