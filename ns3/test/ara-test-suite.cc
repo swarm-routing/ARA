@@ -122,6 +122,11 @@ private:
                                   "RemoveHeader consumes the ant");
             NS_TEST_EXPECT_MSG_EQ(h.IsValid(), true, "header valid");
             NS_TEST_EXPECT_MSG_EQ((h.Get() == a), true, "same ant through the header");
+            // #99: Serialize writes through BufferWireWriter; the bytes are
+            // the core's vector encoder's.
+            std::vector<uint8_t> core;
+            ::ara::core::encodeAnt(a, core);
+            NS_TEST_EXPECT_MSG_EQ((Bytes(p) == core), true, "the core encoder's bytes");
         }
         // The core's byte layout, little endian (core/ara-ant.h).
         const auto b = Bytes(ns3::ara::MakeAntPacket(ants[0]));
@@ -134,6 +139,13 @@ private:
         ns3::ara::AntHeader h;
         FromBytes(bad)->RemoveHeader(h);
         NS_TEST_EXPECT_MSG_EQ(h.IsValid(), false, "a wrong version is invalid");
+        // A short buffer through the header (#99, ReadWireBytes): invalid too.
+        const std::vector<uint8_t> shortBytes(want.begin(), want.end() - 1);
+        ns3::ara::AntHeader cut;
+        NS_TEST_EXPECT_MSG_EQ(FromBytes(shortBytes)->RemoveHeader(cut),
+                              static_cast<uint32_t>(shortBytes.size()),
+                              "a short buffer reads what is there");
+        NS_TEST_EXPECT_MSG_EQ(cut.IsValid(), false, "a short buffer is invalid");
     }
 };
 

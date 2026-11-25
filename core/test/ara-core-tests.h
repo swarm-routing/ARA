@@ -47,6 +47,8 @@ void TestFloodedBantRelay(Checker& c);
 void TestOneRetryAtARelay(Checker& c);
 void TestOneRetryAtTheSourceAndEviction(Checker& c);
 void TestResetForgetsEverything(Checker& c);
+void TestAnsweredDiscoveryCancelsItsTimeout(Checker& c);
+void TestResetCancelsTimeouts(Checker& c);
 void TestDataAsFantAtTheSource(Checker& c);
 void TestDataAsFantPrecedenceAndOff(Checker& c);
 

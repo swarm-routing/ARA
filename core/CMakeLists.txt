@@ -145,6 +145,7 @@ if(ARA_CORE_TESTS)
     test/test-one-retry.cc
     test/test-router.cc
     test/test-selection.cc
+    test/test-timers.cc
   )
   target_link_libraries(ara_core_tests PRIVATE ara_core)
   target_compile_options(ara_core_tests PRIVATE ${ARA_WARNINGS})

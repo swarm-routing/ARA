@@ -70,5 +70,6 @@ build_lib(
     ${ara_core_dir}/test/test-one-retry.cc
     ${ara_core_dir}/test/test-router.cc
     ${ara_core_dir}/test/test-selection.cc
+    ${ara_core_dir}/test/test-timers.cc
     test/ara-test-suite.cc
 )

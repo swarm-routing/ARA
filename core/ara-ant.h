@@ -25,6 +25,7 @@
 
 #include "swarm-observer.h"
 #include "swarm-types.h"
+#include "swarm-wire.h"
 
 #include <array>
 #include <cstddef>
@@ -68,7 +69,21 @@ inline constexpr std::array<swarm::core::KindName, 2> kAntKindNames{{
     {static_cast<std::uint8_t>(AntType::Backward), "BANT"},
 }};
 
-/// Appends the ant's kAntWireSize bytes to `out`.
+/// Writes the ant's kAntWireSize bytes through any swarm-core wire writer
+/// (#99): WireWriter, FixedWireWriter<kAntWireSize>, or the ns-3 adapter's
+/// BufferWireWriter, which writes straight into the packet with no vector.
+template <typename Writer>
+void writeAnt(const AntMessage& ant, swarm::core::WireFields<Writer>& w) {
+    w.version(kAntWireVersion);
+    w.u8(static_cast<std::uint8_t>(ant.type));
+    w.i32(ant.source);
+    w.i32(ant.destination);
+    w.u32(ant.sequence);
+    w.u8(ant.hops);
+    w.u8(ant.ttl);
+}
+
+/// Appends the ant's kAntWireSize bytes to `out` (writeAnt on a WireWriter).
 void encodeAnt(const AntMessage& ant, std::vector<std::uint8_t>& out);
 
 /// Decodes exactly one ant from untrusted bytes: nullopt on a wrong version,

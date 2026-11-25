@@ -32,6 +32,11 @@ void TestAntRoundtrip(Checker& c) {
                                              7,
                                              35};
     c.check(bytes == expected, "layout: version, type, then little-endian fields");
+    // #99: writeAnt through a fixed, non-allocating writer gives the same bytes.
+    swarm::core::FixedWireWriter<kAntWireSize> fixed;
+    writeAnt(fant, fixed);
+    c.check(std::vector<std::uint8_t>(fixed.bytes().begin(), fixed.bytes().end()) == expected,
+            "FixedWireWriter: the same bytes");
     const auto back = decodeAnt(bytes);
     c.check(back && *back == fant, "FANT round-trips");
 

@@ -4,19 +4,12 @@
 // The ant codec, on swarm-core's bounds-checked little-endian helpers.
 #include "ara-ant.h"
 
-#include "swarm-wire.h"
-
 namespace ara::core {
 
 void encodeAnt(const AntMessage& ant, std::vector<std::uint8_t>& out) {
     swarm::core::WireWriter w(out);
-    w.version(kAntWireVersion);
-    w.u8(static_cast<std::uint8_t>(ant.type));
-    w.i32(ant.source);
-    w.i32(ant.destination);
-    w.u32(ant.sequence);
-    w.u8(ant.hops);
-    w.u8(ant.ttl);
+    w.reserve(kAntWireSize);
+    writeAnt(ant, w);
 }
 
 std::optional<AntMessage> decodeAnt(std::span<const std::uint8_t> bytes) {
