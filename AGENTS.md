@@ -159,6 +159,15 @@ fails the first check by design: both arms build on the workflow's
 dependencies, so say so in the PR.
 State lives in `.campaign/<generation>/` (git-ignored); a cell's artifact is
 kept 7 days.
+`python3 -I tools/bench/feed.py PLAN [PLAN...]` runs the dispatch, status
+and collect steps above until every plan is collected (one line per plan
+per round, the cap shared, `--cells` checked at the end), and stops (exit 3)
+if `benchmark-cell.yml`'s dependencies move on the dispatch ref mid-campaign
+(#288, #289). `ADAPTER=<swarm-adapter-ns3> BENCH=<ns3-tools>
+tools/bench/local-perf.sh ns3::ara::RoutingProtocol::<Attr>=<v>` builds this
+checkout with the cells' dependency commits on `ns3-dev:latest-optimized` and
+prints one cell's `##PERF##` lines with and without the attribute (a local
+cost reading, not a paired verdict).
 
 `anchor-3.yaml` is the anchor (the third gate of org rule 6): the trend and
 pass rule of `docs/fidelity.md` "Anchor candidate" (ARA minus AODV, paired by
