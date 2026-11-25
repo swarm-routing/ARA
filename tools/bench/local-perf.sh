@@ -31,8 +31,13 @@ for pair in "$adapter:$want_adapter" "$bench:$want_bench"; do
     dir=${pair%%:*}
     want=${pair##*:}
     have=$(git -C "$dir" rev-parse HEAD)
-    if [ "$have" != "$want" ]; then
+    if [[ "$have" != "$want" ]]; then
         echo "local-perf: $dir is at $have, benchmark-cell.yml builds $want (git -C $dir checkout $want)" >&2
+        exit 1
+    fi
+    # The build mounts the working tree: a local edit would be measured as the pin.
+    if [[ -n "$(git -C "$dir" status --porcelain --untracked-files=no)" ]]; then
+        echo "local-perf: $dir has local changes; the cells build $want as committed" >&2
         exit 1
     fi
 done
@@ -44,17 +49,24 @@ docker run --rm -v "$root:/src/ara:ro" -v "$adapter:/src/adapter:ro" -v "$bench:
 set -e
 ns3-build-contrib swarm-core=/src/adapter routing-bench=/src/bench/ns3/routing-bench ara=/src/ara/ns3 >/tmp/b.log 2>&1 || { tail -40 /tmp/b.log; exit 1; }
 cd /opt/ns-3
-./ns3 run --no-build 'routing-compare $args' > /out/off.txt 2>&1 || true
-./ns3 run --no-build 'routing-compare $args --$attr' > /out/on.txt 2>&1 || true
+./ns3 run --no-build 'routing-compare $args' > /out/off.txt 2>&1 || echo \$? > /out/off.rc
+[ -f /out/off.rc ] || echo 0 > /out/off.rc
+./ns3 run --no-build 'routing-compare $args --$attr' > /out/on.txt 2>&1 || echo \$? > /out/on.rc
+[ -f /out/on.rc ] || echo 0 > /out/on.rc
 "
 markers() { grep '^##' "$1" | grep -v '^##PERF##\|^##ARGS##\|^##CONFIG##'; }
-perf() {  # a run with no ##PERF## failed (an unknown attribute, say): show why
-    grep '^##PERF##' "$1" || { echo "local-perf: no ##PERF## in this run:" >&2; tail -n 15 "$1" >&2; exit 1; }
+perf() {  # a failed run (an unknown attribute, say) fails this script, ##PERF## or not
+    if [[ "$(cat "$1.rc")" != 0 ]]; then
+        echo "local-perf: the run failed (exit $(cat "$1.rc")):" >&2
+        tail -n 15 "$1.txt" >&2
+        exit 1
+    fi
+    grep '^##PERF##' "$1.txt" || { echo "local-perf: no ##PERF## in $1.txt" >&2; exit 1; }
 }
 echo "off:"
-perf "$out/off.txt"
+perf "$out/off"
 echo "on ($attr):"
-perf "$out/on.txt"
+perf "$out/on"
 if diff <(markers "$out/off.txt") <(markers "$out/on.txt") >/dev/null; then
     echo "every other marker line identical ($(markers "$out/off.txt" | wc -l) lines)"
 else
