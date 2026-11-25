@@ -9,8 +9,9 @@
 #include "ns3/prio-queue-disc.h"
 #include "ns3/string.h"
 #include "ns3/traffic-control-helper.h"
+#include "ns3/fq-codel-queue-disc.h"
+#include "ns3/queue-disc-container.h"
 #include "ns3/traffic-control-layer.h"
-#include "ns3/uinteger.h"
 
 namespace ns3 {
 
@@ -62,11 +63,19 @@ uint32_t InstallAntPriority(const NodeContainer& nodes) {
         const TrafficControlHelper::ClassIdList bands =
             tch.AddQueueDiscClasses(root, 2, "ns3::QueueDiscClass");
         for (const uint16_t band : bands) {
-            tch.AddChildQueueDisc(root, band, "ns3::FqCoDelQueueDisc", "Quantum",
-                                  UintegerValue(dev->GetMtu()));
+            tch.AddChildQueueDisc(root, band, "ns3::FqCoDelQueueDisc");
         }
         tch.AddPacketFilter(root, "ns3::ara::DataFlagFilter");
-        tch.Install(dev);
+        const QueueDiscContainer installed = tch.Install(dev);
+        // FqCoDel's quantum is no attribute, only SetQuantum; the queue discs
+        // are not initialized yet (the traffic control layer does that when
+        // the simulation starts), so it is set here.
+        for (uint32_t c = 0; c < installed.Get(0)->GetNQueueDiscClasses(); ++c) {
+            if (Ptr<FqCoDelQueueDisc> band = DynamicCast<FqCoDelQueueDisc>(
+                    installed.Get(0)->GetQueueDiscClass(c)->GetQueueDisc())) {
+                band->SetQuantum(dev->GetMtu());
+            }
+        }
     };
 
     uint32_t installed = 0;
