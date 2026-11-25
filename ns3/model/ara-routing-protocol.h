@@ -104,6 +104,14 @@ protected:
     void OnDataForwarded(Ptr<const Packet> p, const Ipv4Header& header, Ipv4Address next) override;
     void OnDataUndelivered(Ptr<const Packet> p, const Ipv4Header& header, Ipv4Address failedNext,
                            Ipv4Address prev) override;
+    /// Node lifecycle (#100). ARA defines no leaving message ([G02], [GS03]),
+    /// so a shutdown sends nothing and clears as a crash does: the core's
+    /// reset (every trail, history and discovery) and the adapter's own
+    /// state. The base has already cancelled the timers and dropped the held
+    /// packets. ARA has no periodic timer (evaporation is computed on read),
+    /// so a start re-initialises nothing.
+    void DoNodeShutdown() override;
+    void DoNodeCrash() override;
 
 private:
     /// The core's clock port. Clock() is const and the router takes a

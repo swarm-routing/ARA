@@ -166,6 +166,17 @@ public:
     /// table's size is reported again at its next change.
     void setObserver(swarm::core::IRouterObserver* observer);
 
+    /// Node lifecycle (#100): forgets every trail, the FANT, BANT and data
+    /// histories, the reverse pointers and the discoveries, as a router
+    /// freshly constructed with the same configuration would hold, and tells
+    /// the observer each trail it dropped. Two things stay: the observer, and
+    /// the FANT sequence counter, which keeps counting, so neighbours whose
+    /// histories still hold this node's earlier numbers do not take its new
+    /// FANTs for duplicates (a repo choice). Timers already scheduled are the
+    /// caller's to cancel (the adapter's base cancels them on shutdown and
+    /// crash).
+    void reset();
+
     /// What one trail table entry takes: the destination and the neighbour
     /// address and the pheromone value (the payload, not the map's nodes).
     static constexpr std::uint32_t kTrailEntryBytes =
@@ -198,6 +209,10 @@ private:
         void record(NodeAddress source, std::uint32_t sequence, NodeAddress previousHop, Time now);
         NodeAddress find(NodeAddress source, std::uint32_t sequence, Time now) const;
         std::size_t size() const { return hops_.size(); }
+        void clear() {
+            hops_.clear();
+            order_.clear();
+        }
 
     private:
         using Key = std::pair<NodeAddress, std::uint32_t>;
@@ -226,6 +241,10 @@ private:
         /// is unknown or expired (a source's own packet has no entry).
         void markTried(const DataKey& key, NodeAddress previousHop, Time now);
         std::size_t size() const { return hops_.size(); }
+        void clear() {
+            hops_.clear();
+            order_.clear();
+        }
 
     private:
         std::size_t capacity_;

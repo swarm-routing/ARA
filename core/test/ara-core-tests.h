@@ -46,6 +46,7 @@ void TestFloodedBantOnADiamond(Checker& c);
 void TestFloodedBantRelay(Checker& c);
 void TestOneRetryAtARelay(Checker& c);
 void TestOneRetryAtTheSourceAndEviction(Checker& c);
+void TestResetForgetsEverything(Checker& c);
 
 struct NamedTest {
     const char* name;

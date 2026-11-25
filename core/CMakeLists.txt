@@ -137,6 +137,7 @@ if(ARA_CORE_TESTS)
     test/test-ant-codec.cc
     test/test-failure.cc
     test/test-flood-bant.cc
+    test/test-lifecycle.cc
     test/test-maintenance.cc
     test/test-network.cc
     test/test-observer.cc

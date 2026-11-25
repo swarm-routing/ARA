@@ -62,6 +62,7 @@ build_lib(
     ${ara_core_dir}/test/test-ant-codec.cc
     ${ara_core_dir}/test/test-failure.cc
     ${ara_core_dir}/test/test-flood-bant.cc
+    ${ara_core_dir}/test/test-lifecycle.cc
     ${ara_core_dir}/test/test-maintenance.cc
     ${ara_core_dir}/test/test-network.cc
     ${ara_core_dir}/test/test-observer.cc
