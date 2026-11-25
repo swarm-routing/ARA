@@ -300,6 +300,8 @@ private:
     void scheduleTimeout(NodeAddress dest, std::uint32_t sequence, int retries);
     /// Ends `dest`'s discovery, if any, cancelling its pending timeout.
     void endDiscovery(NodeAddress dest);
+    /// Broadcasts `relay` after `delay`, unless the router resets first.
+    void scheduleRelay(Time delay, const AntMessage& relay);
     void onTimeout(NodeAddress dest, std::uint32_t sequence);
 
     NodeAddress self_;
@@ -316,6 +318,8 @@ private:
     DataHistory dataHistory_;
     std::map<NodeAddress, Discovery> discoveries_;
     std::uint32_t nextSequence_ = 1;
+    /// Counts reset() calls: a relay sends only in the epoch it was scheduled in (#287).
+    std::uint64_t epoch_ = 0;
     Time lastAged_;
     /// lazyDecay (#50): when each row was last aged. One per row in the
     /// table, never more (rows that empty are erased), so bounded by

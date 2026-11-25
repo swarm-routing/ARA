@@ -72,4 +72,22 @@ void TestResetCancelsTimeouts(Checker& c) {
     c.check(h.events.ran() == ran && h.out.size() == 3, "nothing ran or was sent after the reset");
 }
 
+void TestResetDropsPendingRelays(Checker& c) {
+    // #287: a FANT relay waits U[0, relayJitterMax); a reset in between (a
+    // crash) must not let it out, on a scheduler that cancels or not.
+    for (const bool cancels : {false, true}) {
+        for (const bool crash : {false, true}) {
+            Harness h(5);
+            h.events.setCancels(cancels);
+            h.router.onAnt(AntMessage{AntType::Forward, 1, 9, 1, 0, 35}, 2);
+            const bool pending = h.out.empty() && h.events.pending() == 1;
+            if (crash) h.router.reset();
+            h.events.advance(Config{}.relayJitterMax + 0.1);
+            const std::string kind = std::string(cancels ? "cancelling" : "plain") +
+                                     (crash ? ", reset: nothing sent" : ", no reset: relayed");
+            c.check(pending && h.out.size() == (crash ? 0u : 1u), kind);
+        }
+    }
+}
+
 }  // namespace ara::core::test
