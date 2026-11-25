@@ -19,7 +19,12 @@ revision with --rev, e.g. HEAD) and fails unless:
   1. every `source_sha` of the plan pins the swarm-core commit the workflow
      builds (swarm-core.lock's SWARM_CORE_COMMIT, the release's commit, or, at
      a commit from before the lock, core/CMakeLists.txt's SWARM_CORE_REF): the commit
-     under test was written and tested by CI with that swarm-core. The plan
+     under test was written and tested by CI with that swarm-core. When the
+     workflow's `swarm-core=` line builds another repository than the lock's
+     SWARM_CORE_REPO (the ns-3 module, swarm-routing/swarm-adapter-ns3, which
+     carries swarm-core through its own swarm-core.lock), the swarm-core it
+     builds is that repository's swarm-core.lock at the workflow's commit, read
+     from raw.githubusercontent.com (#220); The plan
      is parsed as ns3-campaign parses it (PyYAML for .yaml/.yml, tomllib,
      json), and `source_sha` is read where ns3-campaign reads it: the plan's
      own and every `pins.<arm>.source_sha`. So a key or a value is what the
@@ -53,13 +58,25 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 SHA = r"[0-9a-f]{40}"
-DEP_LINE = re.compile(rf"^\s+([a-z0-9][a-z0-9-]*)=[\w.-]+/[\w.-]+@({SHA})(?::\S+)?\s*$", re.M)
+DEP_LINE = re.compile(rf"^\s+([a-z0-9][a-z0-9-]*)=([\w.-]+/[\w.-]+)@({SHA})(?::\S+)?\s*$", re.M)
 PIN = re.compile(rf'set\(SWARM_CORE_REF\s+"({SHA})"')
 LOCK_PIN = re.compile(rf"^SWARM_CORE_COMMIT=({SHA})$", re.M)
+LOCK_REPO = re.compile(r"^SWARM_CORE_REPO=([\w.-]+/[\w.-]+)$", re.M)
+
+
+def fetch_lock(repo, commit):
+    """`repo`'s swarm-core.lock at `commit`, or None (a public raw read)."""
+    url = f"https://raw.githubusercontent.com/{repo}/{commit}/swarm-core.lock"
+    try:
+        with urllib.request.urlopen(url, timeout=30) as r:  # noqa: S310 (a fixed https host)
+            return r.read().decode("utf-8")
+    except OSError:
+        return None
 
 
 def inside(root, path):
@@ -132,7 +149,7 @@ def plan_names(text, name):
     return list(dict.fromkeys(re.findall(pat, text)))
 
 
-def check(root, plan_path, rev=None, cells=None, out=print):
+def check(root, plan_path, rev=None, cells=None, out=print, fetch=fetch_lock):
     """Prints one line per check; returns the number of failures."""
     fails = 0
 
@@ -165,7 +182,9 @@ def check(root, plan_path, rev=None, cells=None, out=print):
     if wf is None:
         fail(f"cannot read {wf_path} at {rev} (git fetch origin, or give --rev)")
         return fails
-    deps = dict((n, c) for n, c in DEP_LINE.findall(wf))
+    found = DEP_LINE.findall(wf)
+    deps = {n: c for n, _r, c in found}
+    repos = {n: r for n, r, _c in found}
     if "swarm-core" not in deps:
         fail(f"{wf_path} at {rev} names no swarm-core=<owner>/<repo>@<commit> dependency")
         return fails
@@ -191,13 +210,25 @@ def check(root, plan_path, rev=None, cells=None, out=print):
                 f"cannot read swarm-core.lock or SWARM_CORE_REF in core/CMakeLists.txt at {sha} "
                 "(git fetch origin)"
             )
-        elif pin.group(1) != deps["swarm-core"]:
+            continue
+        builds, via = deps["swarm-core"], ""
+        core_repo = LOCK_REPO.search(lock) if lock and where == "swarm-core.lock" else None
+        if core_repo and core_repo.group(1) != repos["swarm-core"]:
+            # The workflow builds the ns-3 module, which locks its own swarm-core (#220).
+            module = f"{repos['swarm-core']}@{builds[:7]}"
+            theirs = fetch(repos["swarm-core"], builds)
+            locked = LOCK_PIN.search(theirs) if theirs else None
+            if not locked:
+                fail(f"cannot read swarm-core.lock of {module} (the swarm-core its cells build)")
+                continue
+            builds, via = locked.group(1), f" through {module}'s swarm-core.lock"
+        if pin.group(1) != builds:
             fail(
                 f"source_sha {sha[:7]} pins swarm-core {pin.group(1)[:7]} ({where}), "
-                f"but its cells would build on {deps['swarm-core'][:7]}"
+                f"but its cells would build on {builds[:7]}{via}"
             )
         else:
-            out(f"ok   source_sha {sha[:7]} pins swarm-core {pin.group(1)[:7]}, as the workflow")
+            out(f"ok   source_sha {sha[:7]} pins swarm-core {pin.group(1)[:7]}, as the workflow{via}")
 
     for name, commit in deps.items():
         named = plan_names(text, name)
@@ -363,6 +394,41 @@ def self_test():
         expect("a locked source_sha in step", go(plan(locked, named_c)), 0)
         expect("a pre-lock source_sha against the locked workflow",
                go(plan(new, named_c)), 1, "pins swarm-core bbbbbbb (SWARM_CORE_REF)")  # fmt: skip
+        # #220: the workflow builds the ns-3 module (another repository than the lock's),
+        # which locks its own swarm-core: compare the two locks.
+        m = "e" * 40
+        (root / "swarm-core.lock").write_text(
+            f"SWARM_CORE_REPO=swarm-routing/swarm-core\nSWARM_CORE_COMMIT={c}\n"
+        )
+        (root / ".github/workflows/benchmark-cell.yml").write_text(
+            "      dependencies: |\n"
+            f"        swarm-core=swarm-routing/swarm-adapter-ns3@{m}\n"
+            f"        routing-bench=swarm-routing/ns3-tools@{rb}:ns3/routing-bench\n"
+        )
+        run("add", "-A")
+        run("commit", "-q", "-m", "adapter")
+        on_adapter = git(root, "rev-parse", "HEAD").strip()
+        named_m = f"# swarm-core@{m[:7]} routing-bench@{rb}\n"
+        asked = []
+
+        def adapter_lock(commit):
+            def fetch(repo, at):
+                asked.append((repo, at))
+                return None if commit is None else f"SWARM_CORE_COMMIT={commit}\n"
+
+            return fetch
+
+        expect("the module locks the same swarm-core",
+               go(plan(on_adapter, named_m), fetch=adapter_lock(c)), 0,
+               "through swarm-routing/swarm-adapter-ns3@eeeeeee's swarm-core.lock")  # fmt: skip
+        if asked != [("swarm-routing/swarm-adapter-ns3", m)]:
+            failures.append(f"the module's lock read at its commit: {asked}")
+        expect("the module locks another swarm-core",
+               go(plan(on_adapter, named_m), fetch=adapter_lock(a)), 1,
+               "would build on aaaaaaa through")  # fmt: skip
+        expect("the module's lock cannot be read",
+               go(plan(on_adapter, named_m), fetch=adapter_lock(None)), 1,
+               "cannot read swarm-core.lock of swarm-routing/swarm-adapter-ns3")  # fmt: skip
         (root / "swarm-core.lock").unlink()
         (root / "core/CMakeLists.txt").write_text(f'set(SWARM_CORE_REF "{b}" CACHE STRING\n')
         (root / ".github/workflows/benchmark-cell.yml").write_text(
@@ -401,7 +467,7 @@ def self_test():
 
     for f in failures:
         print(f"FAIL {f}")
-    print(f"self-test: {'FAIL' if failures else 'ok'} (32 cases)")
+    print(f"self-test: {'FAIL' if failures else 'ok'} (36 cases)")
     return 1 if failures else 0
 
 
