@@ -151,6 +151,8 @@ void Router::reset() {
     bantHistory_.clear();
     reverse_.clear();
     dataHistory_.clear();
+    for (const auto& entry : discoveries_)
+        timers_.cancel(entry.second.timer);  // #99: none of them runs after a reset
     discoveries_.clear();
     weights_.clear();
     lastAged_ = clock_.now();
@@ -349,7 +351,7 @@ void Router::onBackwardAnt(const AntMessage& ant, NodeAddress from) {
 
     if (ant.destination == self_) {
         // Fidelity "Data may be sent once the source receives the BANT".
-        discoveries_.erase(ant.source);
+        endDiscovery(ant.source);
         return;
     }
     if (config_.floodBackwardAnts) {
@@ -424,7 +426,16 @@ void Router::scheduleTimeout(NodeAddress dest, std::uint32_t sequence, int retri
     Time wait = config_.discoveryTimeout;
     for (int i = 0; i < retries; ++i)
         wait *= 2.0;
-    timers_.schedule(wait, [this, dest, sequence] { onTimeout(dest, sequence); });
+    const swarm::core::TimerHandle timer =
+        timers_.scheduleCancellable(wait, [this, dest, sequence] { onTimeout(dest, sequence); });
+    if (auto it = discoveries_.find(dest); it != discoveries_.end()) it->second.timer = timer;
+}
+
+void Router::endDiscovery(NodeAddress dest) {
+    const auto it = discoveries_.find(dest);
+    if (it == discoveries_.end()) return;
+    timers_.cancel(it->second.timer);
+    discoveries_.erase(it);
 }
 
 // Fidelity "Discovery retries when no BANT returns": a retry only while the
