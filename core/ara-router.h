@@ -258,6 +258,17 @@ private:
         std::deque<DataKey> order_;
     };
     void age();
+    /// Ages before touching `dest`'s row: the whole table (age()), or with
+    /// lazyDecay (#50) that row alone (ageRow).
+    void age(NodeAddress dest);
+    /// lazyDecay: ages `dest`'s row from its timestamp to now, dropping the
+    /// entries below expiryThreshold as age() does.
+    void ageRow(NodeAddress dest);
+    /// lazyDecay, on a full table: ages every row to now. True when that
+    /// freed a slot, so a refused write may be retried.
+    bool reclaim();
+    /// lazyDecay: a row written now gets its timestamp if it has none.
+    void stamp(NodeAddress dest);
     /// Removes (dest, over), telling the observer when it existed.
     void dropTrail(NodeAddress dest, NodeAddress over);
     /// The sink, after telling the observer (an ant is kAntWireSize bytes).
@@ -306,6 +317,12 @@ private:
     std::map<NodeAddress, Discovery> discoveries_;
     std::uint32_t nextSequence_ = 1;
     Time lastAged_;
+    /// lazyDecay (#50): when each row was last aged. One per row in the
+    /// table, never more (rows that empty are erased), so bounded by
+    /// pheromoneCapacity (org rule 7).
+    std::map<NodeAddress, Time> rowAged_;
+    /// ageRow()'s scratch: the row being aged, copied so it can be written.
+    std::vector<swarm::core::PheromoneTable::Entry> rowScratch_;
     swarm::core::IRouterObserver* observer_ = nullptr;
     std::optional<std::size_t> reportedEntries_;  ///< table size the observer last heard
     /// age()'s scratch: the (destination, neighbour) entries about to expire.

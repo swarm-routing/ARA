@@ -812,6 +812,29 @@ private:
         BooleanValue dataAsFant;
         p->GetAttribute("DataAsFant", dataAsFant);
         NS_TEST_EXPECT_MSG_EQ(dataAsFant.Get(), c.dataAsFant, "DataAsFant");
+        BooleanValue lazyDecay;
+        p->GetAttribute("LazyDecay", lazyDecay);
+        NS_TEST_EXPECT_MSG_EQ(lazyDecay.Get(), c.lazyDecay, "LazyDecay");
+    }
+};
+
+/// LazyDecay on (#50): on the 4-node chain, where each node has one trail per
+/// direction, ageing row by row changes no choice: the same ants and
+/// deliveries as the default, and a seed still fixes the run.
+class LazyDecayTestCase : public TestCase {
+public:
+    LazyDecayTestCase() : TestCase("switch: LazyDecay, the chain run unchanged (#50)") {}
+
+private:
+    void DoRun() override {
+        const ChainRun eager = Chain().Run(1, 20);
+        const ChainRun a = Chain().With("LazyDecay", "true").Run(1, 20);
+        const ChainRun b = Chain().With("LazyDecay", "true").Run(1, 20);
+        NS_TEST_ASSERT_MSG_EQ(a.sent, 20u, "packets sent");
+        NS_TEST_EXPECT_MSG_EQ(a.received, eager.received, "the default's deliveries");
+        NS_TEST_EXPECT_MSG_EQ((a.trace == eager.trace), true, "the default's ants and deliveries");
+        NS_TEST_EXPECT_MSG_EQ(a.nextHop0, a.expect0, "node 0 routes to node 3 over node 1");
+        NS_TEST_EXPECT_MSG_EQ((a.trace == b.trace), true, "seed 1 twice: identical");
     }
 };
 
@@ -1260,6 +1283,7 @@ public:
         AddTestCase(new OneRetryOnFailureTestCase, TestCase::Duration::QUICK);
         AddTestCase(new LifecycleTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DataAsFantTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new LazyDecayTestCase, TestCase::Duration::QUICK);
         AddTestCase(new PrioritizeAntsTestCase, TestCase::Duration::QUICK);
     }
 };

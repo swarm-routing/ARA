@@ -69,6 +69,7 @@ endif()
 option(ARA_CORE_TESTS "Build the tests and register them with ctest" ${_ara_core_top})
 option(ARA_CORE_SWARM_CORE_FROM_PACKAGE "Take swarm-core from find_package(swarm-core CONFIG) even when SWARM_CORE_DIR is set" OFF)
 option(ARA_CORE_INSTALL "Add the install rules and the CMake package ara-core" OFF)
+option(ARA_CORE_BENCH "Build bench/ara-decay-bench: the per-event cost of eager and lazy decay (#50); not run by CI" OFF)
 if(SWARM_CORE_DIR AND NOT ARA_CORE_SWARM_CORE_FROM_PACKAGE)
   set(_ara_core_swarm_core_from_dir ON)
 else()
@@ -138,6 +139,7 @@ if(ARA_CORE_TESTS)
     test/test-data-fant.cc
     test/test-failure.cc
     test/test-flood-bant.cc
+    test/test-lazy-decay.cc
     test/test-lifecycle.cc
     test/test-maintenance.cc
     test/test-network.cc
@@ -152,6 +154,12 @@ if(ARA_CORE_TESTS)
 
   enable_testing()
   add_test(NAME ara-core COMMAND ara_core_tests)
+endif()
+
+if(ARA_CORE_BENCH)
+  add_executable(ara_decay_bench bench/ara-decay-bench.cc)
+  target_link_libraries(ara_decay_bench PRIVATE ara_core)
+  target_compile_options(ara_decay_bench PRIVATE ${ARA_WARNINGS})
 endif()
 
 if(ARA_CORE_INSTALL)

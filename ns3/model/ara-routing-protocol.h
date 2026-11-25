@@ -139,6 +139,8 @@ private:
     bool m_prioritizeAnts;
     /// The DataAsFant attribute: core Config dataAsFant (#132).
     bool m_dataAsFant;
+    /// The LazyDecay attribute: core Config lazyDecay (#50).
+    bool m_lazyDecay;
     /// With DataAsFant (#132): the sequence numbers of the FANTs onLocalData
     /// chose for this node's own packets with no trail, per destination, in
     /// order (the rest of each FANT is this node, hops 0 and AntTtl);

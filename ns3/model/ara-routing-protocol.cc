@@ -87,6 +87,14 @@ TypeId RoutingProtocol::GetTypeId() {
                               BooleanValue(d.dataAsFant),
                               MakeBooleanAccessor(&RoutingProtocol::m_dataAsFant),
                               MakeBooleanChecker())
+                .AddAttribute("LazyDecay",
+                              "Each event ages only the pheromone row it touches, from that "
+                              "row's own time, instead of the whole table; unread entries below "
+                              "the threshold are reclaimed when a write finds the table full "
+                              "(core Config lazyDecay, #50; off: the whole table, every event).",
+                              BooleanValue(d.lazyDecay),
+                              MakeBooleanAccessor(&RoutingProtocol::m_lazyDecay),
+                              MakeBooleanChecker())
                 .AddAttribute("EvaporationRate",
                               "Evaporation rate q of eq. 2, phi := (1 - q) phi per "
                               "EvaporationPeriod, in (0, 1] (core Config evaporationRate).",
@@ -176,7 +184,7 @@ RoutingProtocol::RoutingProtocol()
       m_statistical(core::Config{}.statisticalPathSelection),
       m_floodBants(core::Config{}.floodBackwardAnts), m_oneRetry(core::Config{}.oneRetryOnFailure),
       m_prioritizeAnts(false), m_dataAsFant(core::Config{}.dataAsFant),
-      m_evaporationRate(core::Config{}.evaporationRate),
+      m_lazyDecay(core::Config{}.lazyDecay), m_evaporationRate(core::Config{}.evaporationRate),
       m_evaporationPeriod(core::Config{}.evaporationPeriod), m_deposit(core::Config{}.deposit),
       m_expiryThreshold(core::Config{}.expiryThreshold), m_antTtl(core::Config{}.antTtl),
       m_relayJitterMax(core::Config{}.relayJitterMax),
@@ -213,6 +221,7 @@ void RoutingProtocol::DoInitialize() {
     config.floodBackwardAnts = m_floodBants;
     config.oneRetryOnFailure = m_oneRetry;
     config.dataAsFant = m_dataAsFant;
+    config.lazyDecay = m_lazyDecay;
     m_router = std::make_unique<core::Router>(
         self, config, m_clock, Rng(), Timers(), [this](const core::AntDecision& d) {
             if (d.message) {
