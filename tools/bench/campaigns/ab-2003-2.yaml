@@ -1,0 +1,91 @@
+# Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
+# SPDX-License-Identifier: MIT OR GPL-2.0-only
+#
+# The A/B of the first two 2003 switches (#125 scope item 3, #135, #136): from
+# the authors' 2003 chapter (Günes & Spaniol, IFIP Net-Con 2003,
+# https://doi.org/10.1007/978-0-387-35703-4_9), statistical path selection
+# (§2.2, §5.2; StatisticalPathSelection) and BANTs flooded like FANTs (§4.5;
+# FloodBackwardAnts), each alone and on top of the send buffer
+# (BufferDuringDiscovery, #5), since [GS03] §5.2 measured its features on top
+# of it, then all three together. One commit, bda03d2 (main after the
+# swarm-core pin bump #283), arms that differ only in attributes; identical seeds; q = 0.1
+# (#140); on ns3-dev 3.48-optimized (fb7596b) by digest, the anchor's and the q
+# sweep's image (ns-3.49's AODV livelocks, swarm-routing/sim-containers#35).
+#
+# Cells: q-sweep.yaml's four, unchanged: the anchor's gated cells (pause 0 and
+# 30 s, 900 s, 20 seeds in two blocks of 10) and smoke.yaml's two families
+# (300 s, 20 seeds); AODV in the same invocation in every cell (reference:
+# aodv).
+#
+# ab-2003-1 (ab-2003.yaml, at 0b136df) was stale once #283 merged during its
+# dispatch: its 23 cells dispatched before the bump built on
+# swarm-adapter-ns3 73f8f0d, and the 19 not yet dispatched would build on
+# the bump's commit, which `collect` rejects (one dependency set per
+# campaign). This plan re-registers the same design unchanged (arms, cells,
+# seeds, image, expectations) at a commit after the bump; ab-2003.yaml stays
+# as it was, the record of the first registration.
+#
+# Pre-registered here before any dispatch. What it measures (`verdicts`):
+#   - each arm minus `default`, paired by seed, per cell: PDR, delay99, NRL
+#     with their 95 % CIs (the switch A/B; no pass rule);
+#   - each arm's ARA minus AODV, paired by seed (reported, not gated: the
+#     2003 anchor is a separate plan, #125 scope item 4);
+#   - routing packets and nrl_bytes beside them (tools/bench/anchor_extra.py);
+#   - stat_buf minus buf and flood_buf minus buf, read from the same cells
+#     (`verdicts --arm`), for each switch's effect on top of the send buffer.
+# Expected, not gated:
+#   - stat ([GS03] §5.2, Fig. 6: statistical selection alone "similar to ANT
+#     in the less mobile scenarios, but ... better in highly mobile
+#     scenarios"): static-mesh PDR not resolved; anchor-p0, anchor-p30 and
+#     grid-rwp PDR above the default, if the claim carries over;
+#   - flood ([GS03] §4.5, "a better exploitation of the multi-path
+#     capability"): routing packets and nrl_bytes up (a second flood per
+#     discovery); PDR not predicted;
+#   - on top of the buffer, and all together: no direction predicted ([GS03]
+#     reports stat + buffer only with the MAC-Tap, which is not implemented,
+#     #139).
+# `default` reproduces q-sweep.yaml's q01 arm, which reproduced anchor-3, on
+# the anchor cells (the default path is unchanged: #264 and #266 smoked
+# byte-identical). No default moves on this A/B alone: that is the
+# maintainer's decision, recorded on #125 (scope item 5).
+#
+# Dependencies, as .github/workflows/benchmark-cell.yml builds them at main on
+# 2026-11-25: swarm-core@bcb8e21f7c707f74a32be0f8eb4a9e41c38343fa
+# routing-bench@3d279b83392a00288050574cee4288f30205658b. check_plan_deps.py
+# fails on any plan at this time: swarm-core.lock names swarm-core 5fb7c18
+# while the workflow builds swarm-adapter-ns3 bcb8e21 (#220); every arm builds
+# on the same dependencies, so the pairing is unaffected.
+generation: ab-2003-2
+ref: main
+repo: swarm-routing/ARA
+source_sha: bda03d248291eeea926613e453e0b8b4a8b4d491
+workflow: benchmark-cell.yml
+program: routing-compare
+image: ghcr.io/swarm-routing/ns3-dev@sha256:5585a93c5cea1980592539e2d26a4e111e0ff4b0cc63b3dfd6ea5de459d80d3f
+# 42 jobs; at most 4 cell runs at once, so PR CI keeps runners.
+cap: 4
+control: default
+isolates: args
+reference: aodv
+
+x-stat: &stat "--ns3::ara::RoutingProtocol::StatisticalPathSelection=true"
+x-flood: &flood "--ns3::ara::RoutingProtocol::FloodBackwardAnts=true"
+x-buf: &buf "--ns3::ara::RoutingProtocol::BufferDuringDiscovery=true"
+arms:
+  default: ""
+  stat: *stat
+  flood: *flood
+  buf: *buf
+  stat_buf: "--ns3::ara::RoutingProtocol::StatisticalPathSelection=true --ns3::ara::RoutingProtocol::BufferDuringDiscovery=true"
+  flood_buf: "--ns3::ara::RoutingProtocol::FloodBackwardAnts=true --ns3::ara::RoutingProtocol::BufferDuringDiscovery=true"
+  all: "--ns3::ara::RoutingProtocol::StatisticalPathSelection=true --ns3::ara::RoutingProtocol::FloodBackwardAnts=true --ns3::ara::RoutingProtocol::BufferDuringDiscovery=true"
+
+x-field: &field "--scenario=paper --nNodes=50 --time=900 --areaX=1500 --areaY=300 --speed=10 --flows=10 --runs=10 --diag --protocols=ara,aodv"
+cells:
+  anchor-p0: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: *field, extraArgs: "--pause=0"}, blocks: [1, 11]}
+  anchor-p30: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: *field, extraArgs: "--pause=30"}, blocks: [1, 11]}
+  grid-rwp: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: "--scenario=paper --nNodes=50 --time=300 --areaX=1500 --areaY=300 --speed=20 --pause=30 --range=300 --propagation=range --mobility=rwp --transport=udp --diag --firstRun=1 --runs=20 --protocols=ara,aodv"}}
+  static-mesh: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: "--scenario=paper --nNodes=50 --time=300 --areaX=1500 --areaY=300 --speed=20 --pause=300 --range=300 --propagation=range --mobility=rwp --transport=udp --diag --firstRun=1 --runs=20 --protocols=ara,aodv"}}
+
+jobs:
+  - {arms: [default, stat, flood, buf, stat_buf, flood_buf, all], cells: "*"}
