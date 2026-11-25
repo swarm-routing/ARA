@@ -44,6 +44,7 @@ BUSY = re.compile(r"queued|in_progress|not-dispatched")
 
 def plan_deps_module():
     """check_plan_deps.py, by path (python3 -I keeps this directory off sys.path)."""
+    sys.dont_write_bytecode = True  # no __pycache__ beside the scripts
     spec = importlib.util.spec_from_file_location(
         "check_plan_deps", os.path.join(HERE, "check_plan_deps.py")
     )
