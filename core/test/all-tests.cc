@@ -39,7 +39,7 @@ constexpr std::array<NamedTest, 34> kTests{{
     {"route failure: no other trail, back to the previous hop", TestFailureBacktracks},
     {"route failure: at the source, a new discovery", TestFailureAtSourceRediscovers},
     {"route failure: backtracking on a diamond, end to end", TestBacktrackOnADiamond},
-    {"statistical selection (switch): each trail's share is ϕ/Σϕ", TestStatisticalShares},
+    {"statistical selection (switch): each trail's share is ϕ over Σϕ", TestStatisticalShares},
     {"statistical selection (switch): not back to the previous hop",
      TestStatisticalLeavesOutThePreviousHop},
     {"statistical selection (switch): off by default, decisions and draws unchanged",
