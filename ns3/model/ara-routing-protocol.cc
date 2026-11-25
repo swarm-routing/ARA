@@ -10,6 +10,7 @@
 #include "ns3/double.h"
 #include "ns3/integer.h"
 #include "ns3/log.h"
+#include "ns3/socket.h"
 #include "ns3/uinteger.h"
 
 #include <algorithm>
@@ -65,6 +66,15 @@ TypeId RoutingProtocol::GetTypeId() {
                               "next trail, as [G02]).",
                               BooleanValue(d.oneRetryOnFailure),
                               MakeBooleanAccessor(&RoutingProtocol::m_oneRetry),
+                              MakeBooleanChecker())
+                .AddAttribute("PrioritizeAnts",
+                              "FANTs, BANTs and data flagged Backtrack or DuplicateError go "
+                              "ahead in the IP-level queue: a PrioQueueDisc with two FqCoDel "
+                              "bands, installed by AraHelper::Install or the bench arm ([GS03] "
+                              "4.5, #137; an adapter switch: off, no priority, the default "
+                              "queue disc).",
+                              BooleanValue(false),
+                              MakeBooleanAccessor(&RoutingProtocol::m_prioritizeAnts),
                               MakeBooleanChecker())
                 .AddAttribute("EvaporationRate",
                               "Evaporation rate q of eq. 2, phi := (1 - q) phi per "
@@ -154,7 +164,7 @@ RoutingProtocol::RoutingProtocol()
     : m_buffer(core::Config{}.bufferDuringDiscovery),
       m_statistical(core::Config{}.statisticalPathSelection),
       m_floodBants(core::Config{}.floodBackwardAnts), m_oneRetry(core::Config{}.oneRetryOnFailure),
-      m_evaporationRate(core::Config{}.evaporationRate),
+      m_prioritizeAnts(false), m_evaporationRate(core::Config{}.evaporationRate),
       m_evaporationPeriod(core::Config{}.evaporationPeriod), m_deposit(core::Config{}.deposit),
       m_expiryThreshold(core::Config{}.expiryThreshold), m_antTtl(core::Config{}.antTtl),
       m_relayJitterMax(core::Config{}.relayJitterMax),
@@ -196,7 +206,18 @@ void RoutingProtocol::DoInitialize() {
                 m_antTx(static_cast<uint8_t>(d.message->type),
                         d.action == swarm::core::RouteAction::Broadcast);
             }
-            const bool done = Execute(d, MakeAntPacket);
+            // With PrioritizeAnts (#137) the ant carries kAntPriority, which
+            // the UDP send keeps (the control socket's own priority is 0)
+            // and the PrioQueueDisc's priomap sends to band 0.
+            const bool done = Execute(d, [this](const core::AntMessage& ant) {
+                Ptr<Packet> p = MakeAntPacket(ant);
+                if (m_prioritizeAnts) {
+                    SocketPriorityTag tag;
+                    tag.SetPriority(kAntPriority);
+                    p->ReplacePacketTag(tag);
+                }
+                return p;
+            });
             NS_ASSERT_MSG(done &&
                               (d.message || d.action == swarm::core::RouteAction::DiscardPending),
                           "the ARA core sends ants (Broadcast, Unicast) and DiscardPending only");

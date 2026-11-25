@@ -25,7 +25,13 @@ public:
     }
     // InstallRouting only names the helper; the monitors AraHelper::Install
     // would add (a WifiLinkMonitor per wifi node) are added here instead.
-    void AfterStack(bench::RunContext& run) override { SwarmMonitorHelper().Install(run.nodes); }
+    // The bench sets the protocol's attributes as defaults, so the queue disc
+    // of PrioritizeAnts (#137) is installed here, before the bench assigns
+    // the addresses, only where the switch is on.
+    void AfterStack(bench::RunContext& run) override {
+        SwarmMonitorHelper().Install(run.nodes);
+        InstallAntPriority(run.nodes);
+    }
 
 private:
     AraHelper m_helper;

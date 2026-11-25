@@ -17,6 +17,7 @@
 #include "ara-ant.h"
 
 #include "ns3/header.h"
+#include "ns3/packet-filter.h"
 #include "ns3/packet.h"
 #include "ns3/ptr.h"
 #include "ns3/tag.h"
@@ -86,6 +87,24 @@ private:
 
 /// The packet's flag, None when it carries none.
 DataFlagTag::Flag ReadDataFlag(Ptr<const Packet> p);
+
+/// The socket priority an ant carries with PrioritizeAnts on (#137): the
+/// PrioQueueDisc's priomap sends 7 to band 0, every other priority to band 1.
+inline constexpr uint8_t kAntPriority = 7;
+
+/// With PrioritizeAnts (#137): classifies a data packet flagged Backtrack or
+/// DuplicateError into band 0 of the PrioQueueDisc. The flag, not a socket
+/// priority, because ns-3's IP forwarding (which ResendData goes through)
+/// replaces a packet's SocketPriorityTag with one from its IP TOS, while
+/// DataFlagTag travels on. Anything else is no match (the priomap decides).
+class DataFlagFilter : public PacketFilter {
+public:
+    static TypeId GetTypeId();
+
+private:
+    bool CheckProtocol(Ptr<QueueDiscItem> item) const override;
+    int32_t DoClassify(Ptr<QueueDiscItem> item) const override;
+};
 
 }  // namespace ara
 }  // namespace ns3

@@ -83,6 +83,11 @@ public:
     /// Ipv4Address() when it has no trail (or the protocol has not started).
     Ipv4Address NextHop(Ipv4Address dst);
 
+    /// The PrioritizeAnts attribute (#137): an adapter switch, not a core
+    /// constant (priority is queueing, rule 10). AraHelper::Install and the
+    /// bench arm read it to install the PrioQueueDisc (InstallAntPriority).
+    bool PrioritizesAnts() const { return m_prioritizeAnts; }
+
     /// An ant this node sent: (core::AntType as its wire byte, broadcast).
     typedef void (*AntTxCallback)(uint8_t type, bool broadcast);
 
@@ -114,6 +119,8 @@ private:
     bool m_floodBants;
     /// The OneRetryOnFailure attribute: core Config oneRetryOnFailure (#138).
     bool m_oneRetry;
+    /// The PrioritizeAnts attribute (#137): ants carry kAntPriority.
+    bool m_prioritizeAnts;
     /// The core's constants (core/ara-config.h), one attribute each (#108),
     /// copied into the router's Config by DoInitialize. Their defaults are
     /// core::Config's, read in GetTypeId and in the constructor, never typed
