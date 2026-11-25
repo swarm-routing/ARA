@@ -108,10 +108,11 @@ class Live:
 COLLECTED = re.compile(r"wrote (\d+) file\(s\), skipped (\d+)")
 
 
-def feed(root, plans, cap, every, rounds, world, out=print, allow_plan_fail=False):
+def feed(root, plans, cap, every, rounds, world, out=None, allow_plan_fail=False):
     """0: every plan collected and its cells checked ok; 1: a plan or a cell
     check failed; 2: rounds ran out; 3: the dependencies moved; 4: they could
     not be read."""
+    out = out or (lambda line: print(line, flush=True))  # a line per round, as it happens
     cpd = plan_deps_module()
     todo = {}
     for p in plans:
