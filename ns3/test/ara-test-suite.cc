@@ -919,7 +919,8 @@ private:
 
 /// Node lifecycle (#100): on the 4-node line 0-1-2-3, data 0 -> 3 every
 /// 0.5 s from 1 s to 15.5 s; SwarmLifecycleHelper crashes relay 1 at 5 s and
-/// starts it at 8 s (with its interfaces). Right after the restart node 1
+/// starts it at 8 s (with its interfaces), its radio out of range in between.
+/// Right after the restart node 1
 /// holds no trail toward 3 (none survives the crash); delivery recovers after
 /// it; the same seed and schedule give the same arrivals.
 class LifecycleTestCase : public TestCase {
@@ -970,6 +971,13 @@ private:
         SwarmLifecycleHelper life;
         life.Schedule(Seconds(5.0), nodes.Get(1), SwarmLifecycleOp::Crash);
         life.Schedule(Seconds(8.0), nodes.Get(1), SwarmLifecycleOp::Start);
+        // The helper takes the node's IPv4 interfaces down, but its Wi-Fi MAC
+        // still acknowledges frames, so node 0 would see no link failure and
+        // keep refreshing its trail over node 1 with its own data. The radio
+        // goes too here: node 1 leaves range for the crash and comes back.
+        Ptr<MobilityModel> m1 = nodes.Get(1)->GetObject<MobilityModel>();
+        Simulator::Schedule(Seconds(5.0), [m1]() { m1->SetPosition(Vector(5000.0, 0.0, 0.0)); });
+        Simulator::Schedule(Seconds(8.0), [m1]() { m1->SetPosition(Vector(200.0, 0.0, 0.0)); });
 
         Ptr<Socket> sink = Socket::CreateSocket(nodes.Get(3), UdpSocketFactory::GetTypeId());
         sink->Bind(InetSocketAddress(Ipv4Address::GetAny(), kDataPort));
