@@ -45,7 +45,8 @@ tools/bench/campaigns/   campaign plans: smoke.yaml (the change-test smoke again
                          buffer-ab.yaml (BufferDuringDiscovery off vs on, #5), anchor-buffer.yaml (anchor-3 with the switch on, at 83a1020, #5), q-sweep.yaml (q = 0.1 against 0.9, #140; read in docs/benchmarks/q-sweep.md),
                          ab-2003.yaml (StatisticalPathSelection and FloodBackwardAnts, alone, on the buffer, together, #125, #135, #136;
                          stale mid-dispatch after the pin bump #283, kept as the record), ab-2003-2.yaml (the same design re-registered after it),
-                         ab-2003b.yaml (OneRetryOnFailure, PrioritizeAnts and DataAsFant, alone, on the buffer, together, #137, #138, #132; ab-2003-2's default and buf cells reused)
+                         ab-2003b.yaml (OneRetryOnFailure, PrioritizeAnts and DataAsFant, alone, on the buffer, together, #137, #138, #132; ab-2003-2's default and buf cells reused),
+                         anchor-2003.yaml (the 2003 anchor, #125: ARA 2003 against AODV, [GS03] §5.3's trend, Broch's traffic; reading accepted 2026-11-25; freeze: true)
 ```
 
 ## Build & verify
