@@ -1,0 +1,88 @@
+# Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
+# SPDX-License-Identifier: MIT OR GPL-2.0-only
+#
+# ARA's 2003 anchor (#125 scope item 4; the third gate of org rule 6 for the
+# 2003 version): the authors' own trend for their revision, Günes & Spaniol,
+# IFIP Net-Con 2003 ([GS03], https://doi.org/10.1007/978-0-387-35703-4_9),
+# §5.3. The reading was accepted by the maintainer on 2026-11-25 on #125,
+# items 1-7, before this plan existed; nothing here departs from it.
+#
+#   Trend ([GS03] §5.3): at high mobility ARA 2003 delivers about as well as
+#   AODV (both above DSR, not run here) with the lowest routing overhead.
+#   Rule (pre-registered): paired by seed, ARA 2003 minus AODV, 95 % CI;
+#     (a) PDR: the CI's lower bound above -5 pp at pause 0 and at pause 30
+#         (non-inferiority; delta = 5 pp is a repo choice for "alike",
+#         [GS03] gives no number);
+#     (b) NRL: the CI entirely below 0 at pause 0 and at pause 30.
+#   The anchor passes only if (a) and (b) both hold. The 120 s and 600 s
+#   cells are reported, not gated, as are routing packets and nrl_bytes
+#   (tools/bench/anchor_extra.py).
+#
+# The arm, "ARA 2003": every 2003 feature core/ has, on, whatever the switch
+# A/Bs (ab-2003-2, ab-2003b) say about single switches:
+#   StatisticalPathSelection (§2.2, §5.2; #135), FloodBackwardAnts (§4.5;
+#   #136), PrioritizeAnts (§4.5; #137), OneRetryOnFailure (§4.3; #138),
+#   BufferDuringDiscovery (the send buffer with the minimal FANT, §4.5; #5).
+#   Continual pheromone decrease is the default already. DataAsFant (#132)
+#   stays off: it is the 2002 behaviour. LazyDecay (#50) stays off: not a
+#   paper feature. The MAC-Tap is absent, a stated deviation (#139; [GS03]
+#   §5.2 credits it with "slightly better" delivery).
+#
+# Scenario: anchor-3's field (50 nodes, 1500 m x 300 m, 300 m disk range,
+# random waypoint up to 10 m/s, 900 s, 10 CBR flows; docs/fidelity.md
+# "Benchmark scenario"), with Broch's traffic ([BMJ98] §4.1-4.2, which
+# [GS03] §5.3 cites; #125 recommendation 3):
+#   --speedMin=0: speeds U(0, 10) m/s ([GS03] §5.1, [BMJ98] §4.1), where
+#     anchor-3 draws U(1, 10);
+#   --cbrBps=2048: 4 packets/s of 64 B per flow. [GS03] Fig. 6's
+#     "CBR 4x512Byte" is read as 4 x 512 bit = 4 x 64 B, Broch's value; the
+#     harness's packet size is fixed at 64 B.
+# q = 0.1 (#140). ns3-dev 3.48-optimized by digest, anchor-3's image
+# (ns-3.49's AODV livelocks, swarm-routing/sim-containers#35, NS3-001).
+# 20 seeds per cell (RngRun 1..20) in two jobs of 10.
+#
+# Expected, stated before dispatch (#125, item 7): at 1 packet/s, ab-2003-2's
+# `all` arm (stat + flood + buf) was -20.9 pp PDR below AODV at pause 0. If
+# that carries over, this anchor misses (a), FloodBackwardAnts being the main
+# cost (#136). A miss is recorded as v0.2.0's was, with no tuning of the arm
+# after the fact; whether v0.3.0 ships on it is the maintainer's decision.
+#
+# freeze: true: the first dispatch runs every cell at the tag
+# campaign/anchor-2003-1, created beforehand with
+# .github/workflows/campaign-tag.yml (generation anchor-2003-1, ref main),
+# so a dependency bump merged on main mid-campaign cannot reach its cells
+# (#288). The verdict goes in docs/benchmarks/v0.3.0-anchor.md, with the raw
+# cells in results/cells/anchor-2003-1/.
+#
+# Dependencies, as .github/workflows/benchmark-cell.yml builds them at main on
+# 2026-11-25: swarm-core@bcb8e21f7c707f74a32be0f8eb4a9e41c38343fa
+# routing-bench@3d279b83392a00288050574cee4288f30205658b.
+generation: anchor-2003-1
+ref: main
+repo: swarm-routing/ARA
+source_sha: d890e7d66d53ee89d48ed701f74d1440e3ce76bf
+workflow: benchmark-cell.yml
+program: routing-compare
+image: ghcr.io/swarm-routing/ns3-dev@sha256:5585a93c5cea1980592539e2d26a4e111e0ff4b0cc63b3dfd6ea5de459d80d3f
+freeze: true
+# 8 jobs of 10 seeds; at most 4 cell runs at once, so PR CI keeps runners.
+cap: 4
+control: ara2003
+# The baseline every other protocol of a cell is paired against in `verdicts`.
+reference: aodv
+
+arms:
+  ara2003: "--ns3::ara::RoutingProtocol::StatisticalPathSelection=true --ns3::ara::RoutingProtocol::FloodBackwardAnts=true --ns3::ara::RoutingProtocol::PrioritizeAnts=true --ns3::ara::RoutingProtocol::OneRetryOnFailure=true --ns3::ara::RoutingProtocol::BufferDuringDiscovery=true"
+
+x-field: &field "--scenario=paper --nNodes=50 --time=900 --areaX=1500 --areaY=300 --speed=10 --speedMin=0 --cbrBps=2048 --flows=10 --runs=10 --diag --protocols=ara,aodv"
+cells:
+  # gated: PDR (ARA 2003 - AODV) CI lower bound > -5 pp; NRL CI < 0
+  anchor-p0: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: *field, extraArgs: "--pause=0"}, blocks: [1, 11]}
+  # gated: as anchor-p0
+  anchor-p30: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: *field, extraArgs: "--pause=30"}, blocks: [1, 11]}
+  # reported, not gated
+  anchor-p120: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: *field, extraArgs: "--pause=120"}, blocks: [1, 11]}
+  anchor-p600: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: *field, extraArgs: "--pause=600"}, blocks: [1, 11]}
+
+jobs:
+  - {arms: [ara2003], cells: "*"}
