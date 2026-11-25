@@ -10,7 +10,7 @@ namespace ara::core::test {
 
 namespace {
 
-constexpr std::array<NamedTest, 42> kTests{{
+constexpr std::array<NamedTest, 43> kTests{{
     {"ant codec: roundtrip", TestAntRoundtrip},
     {"ant codec: the decoder fails closed", TestAntDecoderFailsClosed},
     {"ant codec: seeded fuzz", TestAntFuzz},
@@ -56,6 +56,7 @@ constexpr std::array<NamedTest, 42> kTests{{
      TestLazyDecayReclaimsUnreadEntries},
     {"timers: an answered discovery cancels its timeout", TestAnsweredDiscoveryCancelsItsTimeout},
     {"timers: a reset cancels every pending timeout", TestResetCancelsTimeouts},
+    {"timers: a reset drops pending FANT relays", TestResetDropsPendingRelays},
     {"data as FANT (switch): one FANT per packet, no retry FANT", TestDataAsFantAtTheSource},
     {"data as FANT (switch): over the buffer, the cap, and off", TestDataAsFantPrecedenceAndOff},
 }};

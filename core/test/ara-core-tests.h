@@ -52,6 +52,7 @@ void TestLazyDecayExpiresAtTheThreshold(Checker& c);
 void TestLazyDecayReclaimsUnreadEntries(Checker& c);
 void TestAnsweredDiscoveryCancelsItsTimeout(Checker& c);
 void TestResetCancelsTimeouts(Checker& c);
+void TestResetDropsPendingRelays(Checker& c);
 void TestDataAsFantAtTheSource(Checker& c);
 void TestDataAsFantPrecedenceAndOff(Checker& c);
 

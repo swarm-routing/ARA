@@ -211,6 +211,7 @@ void Router::reset() {
     discoveries_.clear();
     weights_.clear();
     rowAged_.clear();
+    ++epoch_;  // #287: relays scheduled before now are not sent
     lastAged_ = clock_.now();
     if (observer_) {
         for (const auto& [dest, over] : expiring_)
@@ -398,7 +399,7 @@ void Router::onForwardAnt(const AntMessage& ant, NodeAddress from) {
     // the injected RNG (org rule 5), then a broadcast after that delay.
     const double draw = rng_.uniform();
     const Time delay = draw * config_.relayJitterMax;
-    timers_.schedule(delay, [this, relay] { emit(AntDecision::broadcast(relay)); });
+    scheduleRelay(delay, relay);
 }
 
 void Router::onBackwardAnt(const AntMessage& ant, NodeAddress from) {
@@ -427,7 +428,7 @@ void Router::onBackwardAnt(const AntMessage& ant, NodeAddress from) {
         relay.ttl = static_cast<std::uint8_t>(ant.ttl - 1);
         const double draw = rng_.uniform();
         const Time delay = draw * config_.relayJitterMax;
-        timers_.schedule(delay, [this, relay] { emit(AntDecision::broadcast(relay)); });
+        scheduleRelay(delay, relay);
         return;
     }
     const NodeAddress back = reverse_.find(ant.destination, ant.sequence, clock_.now());
@@ -490,6 +491,15 @@ void Router::scheduleTimeout(NodeAddress dest, std::uint32_t sequence, int retri
     const swarm::core::TimerHandle timer =
         timers_.scheduleCancellable(wait, [this, dest, sequence] { onTimeout(dest, sequence); });
     if (auto it = discoveries_.find(dest); it != discoveries_.end()) it->second.timer = timer;
+}
+
+// A relay scheduled before a reset() (a crash, #287) is not sent: it carries
+// the reset epoch it was scheduled in, and only that epoch sends it. Works on
+// any scheduler, cancelling or not; relays never go stale otherwise.
+void Router::scheduleRelay(Time delay, const AntMessage& relay) {
+    timers_.schedule(delay, [this, relay, epoch = epoch_] {
+        if (epoch == epoch_) emit(AntDecision::broadcast(relay));
+    });
 }
 
 void Router::endDiscovery(NodeAddress dest) {
