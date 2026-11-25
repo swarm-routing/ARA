@@ -51,10 +51,11 @@
 #
 # Dependencies, as .github/workflows/benchmark-cell.yml builds them at main on
 # 2026-11-25: swarm-core@bcb8e21f7c707f74a32be0f8eb4a9e41c38343fa
-# routing-bench@3d279b83392a00288050574cee4288f30205658b. check_plan_deps.py
-# fails on any plan at this time: swarm-core.lock names swarm-core 5fb7c18
-# while the workflow builds swarm-adapter-ns3 bcb8e21 (#220); every arm builds
-# on the same dependencies, so the pairing is unaffected.
+# routing-bench@3d279b83392a00288050574cee4288f30205658b. swarm-core.lock
+# names swarm-core 5fb7c18 and the workflow builds swarm-adapter-ns3 bcb8e21,
+# whose own swarm-core.lock names the same 5fb7c18: check_plan_deps.py, which
+# compares the two locks from #290 on (#220), ends `plan deps: ok` on this
+# plan. It is dispatched only after #290 is on main and that check passes.
 generation: ab-2003-2
 ref: main
 repo: swarm-routing/ARA
