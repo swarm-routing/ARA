@@ -233,6 +233,19 @@ void RoutingProtocol::DoDispose() {
     m_router.reset();
 }
 
+void RoutingProtocol::DoNodeShutdown() {
+    // #100: no leaving message in ARA; the same clearing as a crash.
+    DoNodeCrash();
+}
+
+void RoutingProtocol::DoNodeCrash() {
+    // #100: a restarted node keeps none of its earlier trails or histories.
+    if (m_router) {
+        m_router->reset();
+    }
+    m_transitNoTrail.reset();
+}
+
 Ipv4Address RoutingProtocol::NextHop(Ipv4Address dst) {
     return m_router ? ToIpv4Address(m_router->nextHop(ToNodeAddress(dst))) : Ipv4Address();
 }

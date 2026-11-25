@@ -134,6 +134,34 @@ void Router::setObserver(swarm::core::IRouterObserver* observer) {
     reportedEntries_.reset();
 }
 
+// #100: the reset contract of swarm-core's primitives (clear(): as freshly
+// constructed, configuration kept), for the whole router. The trails go to
+// the observer first, in (destination, neighbour) order, so its counts stay
+// right; nextSequence_ keeps counting (see the header).
+void Router::reset() {
+    if (observer_) {
+        expiring_.clear();
+        for (const NodeAddress dest : table_.destinations()) {
+            for (const auto& e : table_.row(dest))
+                expiring_.emplace_back(dest, e.neighbor);
+        }
+    }
+    table_.clear();
+    fantHistory_.clear();
+    bantHistory_.clear();
+    reverse_.clear();
+    dataHistory_.clear();
+    discoveries_.clear();
+    weights_.clear();
+    lastAged_ = clock_.now();
+    if (observer_) {
+        for (const auto& [dest, over] : expiring_)
+            observer_->onRouteChanged(dest, over, false);
+        expiring_.clear();
+        reportState();
+    }
+}
+
 void Router::emit(const AntDecision& decision) {
     if (observer_ && decision.message) {
         observer_->onControlSent(static_cast<std::uint8_t>(decision.message->type),

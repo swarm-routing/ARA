@@ -42,6 +42,7 @@
 #include "ns3/socket.h"
 #include "ns3/string.h"
 #include "ns3/swarm-core-module.h"
+#include "ns3/swarm-lifecycle-helper.h"
 #include "ns3/test.h"
 #include "ns3/udp-socket-factory.h"
 #include "ns3/uinteger.h"
@@ -916,6 +917,92 @@ private:
     }
 };
 
+/// Node lifecycle (#100): on the 4-node line 0-1-2-3, data 0 -> 3 every
+/// 0.5 s from 1 s to 15.5 s; SwarmLifecycleHelper crashes relay 1 at 5 s and
+/// starts it at 8 s (with its interfaces). Right after the restart node 1
+/// holds no trail toward 3 (none survives the crash); delivery recovers after
+/// it; the same seed and schedule give the same arrivals.
+class LifecycleTestCase : public TestCase {
+public:
+    LifecycleTestCase()
+        : TestCase("lifecycle: a crashed relay restarts with no stale trail; delivery recovers") {}
+
+private:
+    struct Outcome {
+        std::vector<int64_t> arrivals;  ///< receive times, ns
+        Ipv4Address nextHop1AfterStart;
+        Ipv4Address nextHop1BeforeCrash;
+    };
+
+    void DoRun() override {
+        const Outcome a = Run();
+        const Outcome b = Run();
+        NS_TEST_EXPECT_MSG_EQ(a.nextHop1BeforeCrash, Ipv4Address("10.1.0.3"),
+                              "before the crash, node 1 routes to node 3 over node 2");
+        NS_TEST_EXPECT_MSG_EQ(a.nextHop1AfterStart, Ipv4Address(),
+                              "right after the restart, node 1 has no trail toward node 3");
+        uint32_t before = 0;
+        uint32_t after = 0;
+        for (const int64_t t : a.arrivals) {
+            before += t < Seconds(5.0).GetNanoSeconds();
+            after += t > Seconds(9.0).GetNanoSeconds();
+        }
+        NS_TEST_EXPECT_MSG_GT(before, 0u, "delivered before the crash");
+        NS_TEST_EXPECT_MSG_GT(after, 0u, "delivery recovers after the restart");
+        NS_TEST_EXPECT_MSG_EQ((a.arrivals == b.arrivals), true,
+                              "same seed, same schedule: the same arrivals");
+    }
+
+    Outcome Run() {
+        m_out = Outcome{};
+        SwarmCoreSeed(1);
+        NodeContainer nodes;
+        nodes.Create(4);
+        NetDeviceContainer devs = LineOfWifiNodes(nodes);
+        AraHelper ara;
+        ara.Install(nodes);
+        Ipv4AddressHelper a;
+        a.SetBase("10.1.0.0", "255.255.255.0");
+        Ipv4InterfaceContainer ifs = a.Assign(devs);
+        int64_t stream = ara.AssignStreams(nodes, 0);
+        stream += WifiHelper::AssignStreams(devs, stream);
+        InternetStackHelper().AssignStreams(nodes, stream);
+        SwarmLifecycleHelper life;
+        life.Schedule(Seconds(5.0), nodes.Get(1), SwarmLifecycleOp::Crash);
+        life.Schedule(Seconds(8.0), nodes.Get(1), SwarmLifecycleOp::Start);
+
+        Ptr<Socket> sink = Socket::CreateSocket(nodes.Get(3), UdpSocketFactory::GetTypeId());
+        sink->Bind(InetSocketAddress(Ipv4Address::GetAny(), kDataPort));
+        sink->SetRecvCallback(MakeCallback(&LifecycleTestCase::Receive, this));
+        Ptr<Socket> src = Socket::CreateSocket(nodes.Get(0), UdpSocketFactory::GetTypeId());
+        const Ipv4Address dst = ifs.GetAddress(3);
+        for (uint32_t k = 0; k < 30; ++k) {
+            Simulator::Schedule(Seconds(1.0 + 0.5 * k), [src, dst]() {
+                src->SendTo(Create<Packet>(64), 0, InetSocketAddress(dst, kDataPort));
+            });
+        }
+        Ptr<ns3::ara::RoutingProtocol> relay = nodes.Get(1)->GetObject<ns3::ara::RoutingProtocol>();
+        Simulator::Schedule(Seconds(4.9), [this, relay, dst]() {
+            m_out.nextHop1BeforeCrash = relay->NextHop(dst);
+        });
+        Simulator::Schedule(Seconds(8.0) + NanoSeconds(1), [this, relay, dst]() {
+            m_out.nextHop1AfterStart = relay->NextHop(dst);
+        });
+        Simulator::Stop(Seconds(17.0));
+        Simulator::Run();
+        Simulator::Destroy();
+        return m_out;
+    }
+
+    void Receive(Ptr<Socket> socket) {
+        while (socket->Recv()) {
+            m_out.arrivals.push_back(Simulator::Now().GetNanoSeconds());
+        }
+    }
+
+    Outcome m_out;
+};
+
 /// OneRetryOnFailure (#138) on a real MAC: the source S (10.1.0.1) holds
 /// trails toward D (10.1.0.5) over R1, R2 and R3, strongest first; R1 and R2
 /// leave its range before the packet goes, so both links fail at the MAC
@@ -1127,6 +1214,7 @@ public:
         AddTestCase(new StatisticalSelectionTestCase, TestCase::Duration::QUICK);
         AddTestCase(new FloodBackwardAntsTestCase, TestCase::Duration::QUICK);
         AddTestCase(new OneRetryOnFailureTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new LifecycleTestCase, TestCase::Duration::QUICK);
         AddTestCase(new PrioritizeAntsTestCase, TestCase::Duration::QUICK);
     }
 };
