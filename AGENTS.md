@@ -38,6 +38,7 @@ results/cells/<generation>/   the raw cells of each pre-registered run, as `ns3-
 .github/workflows/ns3.yml    ns3/ in ns3-dev latest debug + sanitized (reusable-ns3-ci.yml; checks `ci / ns-latest debug`, `ci / ns-latest sanitized`, `ci / format`), the smoke and the determinism gate
 .github/workflows/swarm-core-pin.yml   the swarm-core pin is one SHA and current (check `swarm-core / pin`)
 .github/workflows/benchmark-cell.yml   one benchmark cell at a pinned source_sha (reusable-benchmark-cell.yml, build mode); dispatched by ns3-campaign
+.github/workflows/campaign-tag.yml     tags a plan's ref as campaign/<generation>, for a `freeze: true` plan dispatched where the token may not create tags (#288)
 tools/bench/check_plan_deps.py   a plan's source_sha and named dependency commits against benchmark-cell.yml's, before a dispatch and on collected cells (#105; --self-test)
 tools/bench/anchor_extra.py      an anchor's reported, not gated, metrics (routing packets, nrl_bytes), paired by seed with ns3-tools' stats_util (--self-test)
 tools/bench/campaigns/   campaign plans: smoke.yaml (the change-test smoke against the base), anchor-3.yaml (the paper's trend, ARA vs AODV; dispatched 2026-11-13, misses), anchor.yaml (its first pre-registration: dispatched 2026-11-13 and read on #5, its cells built on swarm-core 360ceef and 501dd7e, not the 0919dbf it names; superseded, kept as the record, #105),
@@ -166,7 +167,11 @@ kept 7 days.
 and collect steps above until every plan is collected (one line per plan
 per round, the cap shared, `--cells` checked at the end), and stops (exit 3)
 if `benchmark-cell.yml`'s dependencies move on the dispatch ref mid-campaign
-(#288, #289). `ADAPTER=<swarm-adapter-ns3> BENCH=<ns3-tools>
+(#288, #289). A plan with `freeze: true` dispatches every cell at the tag
+`campaign/<generation>`, which its first `dispatch` creates; where the token
+may not create tags (this org's agent sessions), dispatch
+`.github/workflows/campaign-tag.yml` with the plan's `generation` and `ref`
+first, then `dispatch` adopts the tag if `ref` has not moved since. `ADAPTER=<swarm-adapter-ns3> BENCH=<ns3-tools>
 tools/bench/local-perf.sh ns3::ara::RoutingProtocol::<Attr>=<v>` builds this
 checkout with the cells' dependency commits on `ns3-dev:latest-optimized` and
 prints one cell's `##PERF##` lines with and without the attribute (a local
