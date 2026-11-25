@@ -249,6 +249,14 @@ void RoutingProtocol::DoDispose() {
     // The base cancels the core's pending timers first; then the router goes.
     SwarmRoutingBase::DoDispose();
     m_router.reset();
+    // The Ipv4 holds this protocol: dropping our pointer breaks the cycle
+    // (as the base does with its own), and the carried packets go too.
+    m_ipv4Here = nullptr;
+    m_carried.clear();
+    m_carriedOrder.clear();
+    m_delivered.clear();
+    m_deliveredOrder.clear();
+    m_pendingFants.clear();
 }
 
 void RoutingProtocol::DoNodeShutdown() {
