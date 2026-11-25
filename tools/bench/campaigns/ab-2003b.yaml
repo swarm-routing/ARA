@@ -1,0 +1,87 @@
+# Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
+# SPDX-License-Identifier: MIT OR GPL-2.0-only
+#
+# The A/B of the three later switches (#125): from the authors' 2003 chapter
+# (Günes & Spaniol, IFIP Net-Con 2003,
+# https://doi.org/10.1007/978-0-387-35703-4_9), one more try on a failed link
+# (§4.3; OneRetryOnFailure, #138), ants and flagged data prioritized (§4.5;
+# PrioritizeAnts, #137), and the 2002 version's data packet sent as the FANT
+# itself (§4.5; DataAsFant, #132). Each alone; OneRetryOnFailure and
+# PrioritizeAnts also on top of the send buffer (BufferDuringDiscovery, #5),
+# as ab-2003-2 reads its switches; DataAsFant takes precedence over the
+# buffer, so it has no buffer arm; then the three together.
+#
+# The design is ab-2003-2's (ab-2003.yaml's, re-registered after #283): the
+# same commit, cells, seeds, image, q = 0.1 (#140), AODV in every cell
+# (reference: aodv), control `default`. Its `default` and `buf` arms are
+# ab-2003-2's to the byte (same source_sha, image, harness and arguments):
+# `dispatch` reuses those 12 cells by their cell key when ab-2003-2 has run
+# them, and runs only the 36 others.
+#
+# Pre-registered here before any dispatch. What it measures (`verdicts`):
+#   - each arm minus `default`, paired by seed, per cell: PDR, delay99, NRL
+#     with their 95 % CIs (the switch A/B; no pass rule);
+#   - each arm's ARA minus AODV, paired by seed (reported, not gated);
+#   - routing packets and nrl_bytes beside them (tools/bench/anchor_extra.py);
+#   - retry_buf minus buf and prio_buf minus buf (`verdicts --arm`).
+# Expected, not gated:
+#   - retry ([GS03] §4.3, "only one additional try makes sense"): no ants
+#     added, so routing packets unchanged; a packet whose second link fails
+#     backtracks earlier, so delay99 not up; PDR not predicted (fewer
+#     detours, but fewer second chances);
+#   - prio ([GS03] §4.5): ants no longer wait behind data in the interface
+#     queue, so discoveries and backtracking finish sooner: delay99 down and
+#     PDR up where queues hold data (the anchor cells, 10 flows), not
+#     resolved on the near-static mesh; routing packets unchanged;
+#   - dfant ([GS03] §4.5, the 2002 version): the first packets of a
+#     discovery travel in its FANTs, so PDR up at pause 0 and 30 s (no packet
+#     dropped for want of a trail at the source), nrl_bytes up (data inside
+#     every flooded FANT), routing packets up (one FANT per packet while the
+#     discovery runs, no retry FANT);
+#   - on top of the buffer, and all together: no direction predicted.
+# No default moves on this A/B alone: that is the maintainer's decision,
+# recorded on #125 and on each switch's issue.
+#
+# Dependencies, as .github/workflows/benchmark-cell.yml builds them at main on
+# 2026-11-25: swarm-core@bcb8e21f7c707f74a32be0f8eb4a9e41c38343fa
+# routing-bench@3d279b83392a00288050574cee4288f30205658b. swarm-core.lock
+# names swarm-core 5fb7c18 and the workflow builds swarm-adapter-ns3 bcb8e21,
+# whose own swarm-core.lock names the same 5fb7c18: check_plan_deps.py, which
+# compares the two locks from #290 on (#220), ends `plan deps: ok` on this
+# plan. It is dispatched only after #290 is on main and that check passes.
+generation: ab-2003b-1
+ref: main
+repo: swarm-routing/ARA
+source_sha: bda03d248291eeea926613e453e0b8b4a8b4d491
+workflow: benchmark-cell.yml
+program: routing-compare
+image: ghcr.io/swarm-routing/ns3-dev@sha256:5585a93c5cea1980592539e2d26a4e111e0ff4b0cc63b3dfd6ea5de459d80d3f
+# 48 jobs (12 reusable from ab-2003-2); at most 4 cell runs at once, so PR CI keeps runners.
+cap: 4
+control: default
+isolates: args
+reference: aodv
+
+x-retry: &retry "--ns3::ara::RoutingProtocol::OneRetryOnFailure=true"
+x-prio: &prio "--ns3::ara::RoutingProtocol::PrioritizeAnts=true"
+x-dfant: &dfant "--ns3::ara::RoutingProtocol::DataAsFant=true"
+x-buf: &buf "--ns3::ara::RoutingProtocol::BufferDuringDiscovery=true"
+arms:
+  default: ""
+  retry: *retry
+  prio: *prio
+  dfant: *dfant
+  buf: *buf
+  retry_buf: "--ns3::ara::RoutingProtocol::OneRetryOnFailure=true --ns3::ara::RoutingProtocol::BufferDuringDiscovery=true"
+  prio_buf: "--ns3::ara::RoutingProtocol::PrioritizeAnts=true --ns3::ara::RoutingProtocol::BufferDuringDiscovery=true"
+  all: "--ns3::ara::RoutingProtocol::OneRetryOnFailure=true --ns3::ara::RoutingProtocol::PrioritizeAnts=true --ns3::ara::RoutingProtocol::DataAsFant=true"
+
+x-field: &field "--scenario=paper --nNodes=50 --time=900 --areaX=1500 --areaY=300 --speed=10 --flows=10 --runs=10 --diag --protocols=ara,aodv"
+cells:
+  anchor-p0: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: *field, extraArgs: "--pause=0"}, blocks: [1, 11]}
+  anchor-p30: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: *field, extraArgs: "--pause=30"}, blocks: [1, 11]}
+  grid-rwp: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: "--scenario=paper --nNodes=50 --time=300 --areaX=1500 --areaY=300 --speed=20 --pause=30 --range=300 --propagation=range --mobility=rwp --transport=udp --diag --firstRun=1 --runs=20 --protocols=ara,aodv"}}
+  static-mesh: {workflow: benchmark-cell.yml, inputs: {harness: routing-compare, args: "--scenario=paper --nNodes=50 --time=300 --areaX=1500 --areaY=300 --speed=20 --pause=300 --range=300 --propagation=range --mobility=rwp --transport=udp --diag --firstRun=1 --runs=20 --protocols=ara,aodv"}}
+
+jobs:
+  - {arms: [default, retry, prio, dfant, buf, retry_buf, prio_buf, all], cells: "*"}
