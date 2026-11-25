@@ -23,7 +23,10 @@ not dispatched is collected into `.campaign/<generation>/cells`; a collect
 that fails or skips a cell keeps the plan for the next round (the files it
 wrote stay). A complete one gets check_plan_deps.py's `--cells` check, whose
 last line is printed. Exit 0 once every plan is collected and checked ok, 1
-if a cell check failed, 2 after `--rounds` rounds with work left.
+if a cell check failed, 2 after `--rounds` rounds with work left. A plan
+with `freeze: true` whose state records no frozen ref after a dispatch (an
+ns3-campaign from before swarm-routing/sim-tools#368 ignores the key and
+dispatches at the branch) stops it at once, exit 5 (#125).
 
 PLAN is a path inside this repository (check_plan_deps.py's rule, #126).
 `ns3-campaign` is $NS3_CAMPAIGN (a command line), else
@@ -35,6 +38,7 @@ repository. Standard library, plus PyYAML for a .yaml plan (as ns3-campaign).
 
 import argparse
 import importlib.util
+import json
 import os
 import re
 import shlex
@@ -101,6 +105,16 @@ class Live:
         lines = []
         return cpd.check(self.root, plan, cells=cells, out=lines.append), lines
 
+    def frozen(self, generation):
+        """The tag the campaign's state.json records as its frozen ref, or None."""
+        path = os.path.join(self.root, ".campaign", generation, "state.json")
+        try:
+            with open(path) as f:
+                ref = json.load(f).get("ref")
+        except (OSError, ValueError):
+            return None
+        return ref.get("tag") if isinstance(ref, dict) else None
+
     def sleep(self, seconds):
         time.sleep(seconds)
 
@@ -111,7 +125,7 @@ COLLECTED = re.compile(r"wrote (\d+) file\(s\), skipped (\d+)")
 def feed(root, plans, cap, every, rounds, world, out=None, allow_plan_fail=False):
     """0: every plan collected and its cells checked ok; 1: a plan or a cell
     check failed; 2: rounds ran out; 3: the dependencies moved; 4: they could
-    not be read."""
+    not be read; 5: a `freeze: true` plan was dispatched unfrozen."""
     out = out or (lambda line: print(line, flush=True))  # a line per round, as it happens
     cpd = plan_deps_module()
     todo = {}
@@ -151,6 +165,13 @@ def feed(root, plans, cap, every, rounds, world, out=None, allow_plan_fail=False
                 return 3
         for p in list(todo):
             world.campaign("dispatch", p, "--cap", str(cap))
+            gen = str(todo[p]["generation"])
+            if todo[p].get("freeze") is True and not world.frozen(gen):
+                out(
+                    f"feed: {p}: freeze: true, but .campaign/{gen}/state.json records no frozen "
+                    "ref: this ns3-campaign ignores the key (swarm-routing/sim-tools#368); stop"
+                )
+                return 5
             _rc, lines = world.campaign("status", p, "--brief")
             last = lines[-1] if lines else "?"
             out(f"{time.strftime('%H:%M', time.gmtime())} {todo[p]['generation']}: {last}")
@@ -179,8 +200,9 @@ def self_test():
     failures = []
 
     class Fake:
-        def __init__(self, statuses, deps, collects=None, plan_fails=0, cell_fails=0):
+        def __init__(self, statuses, deps, collects=None, plan_fails=0, cell_fails=0, tag=None):
             self.statuses, self.deps_seq, self.calls, self.slept = statuses, deps, [], 0
+            self.tag = tag
             self.collects = collects or {}
             self.plan_fails, self.cell_fails = plan_fails, cell_fails
 
@@ -203,6 +225,9 @@ def self_test():
         def sleep(self, _s):
             self.slept += 1
 
+        def frozen(self, _generation):
+            return self.tag
+
     def go(tmp, plans, world, rounds=5, **kw):
         lines = []
         return feed(tmp, plans, 4, 0, rounds, world, lines.append, **kw), lines
@@ -211,6 +236,8 @@ def self_test():
         for name in ("a", "b"):
             with open(os.path.join(tmp, f"{name}.json"), "w") as f:
                 f.write(f'{{"generation": "g-{name}", "ref": "main"}}')
+        with open(os.path.join(tmp, "z.json"), "w") as f:
+            f.write('{"generation": "g-z", "ref": "main", "freeze": true}')
         world = Fake(
             {
                 "a.json": ["2 in_progress, 1 success", "3 success"],
@@ -258,9 +285,17 @@ def self_test():
         rc, lines = go(tmp, ["a.json"], Fake({"a.json": ["1 success"]}, [("x",)], cell_fails=1))
         if rc != 1:
             failures.append(f"a failing cell check fails the run: rc {rc}: {lines}")
+        world = Fake({"z.json": ["1 success"]}, [("x",)])
+        rc, lines = go(tmp, ["z.json"], world)
+        if rc != 5 or any(c[0] == "status" for c in world.calls):
+            failures.append(f"freeze: true dispatched unfrozen stops at once: rc {rc}: {lines}")
+        world = Fake({"z.json": ["1 success"]}, [("x",)], tag="campaign/g-z")
+        rc, lines = go(tmp, ["z.json"], world)
+        if rc != 0:
+            failures.append(f"freeze: true with a frozen ref goes on: rc {rc}: {lines}")
     for f in failures:
         print(f"FAIL {f}")
-    print(f"self-test: {'FAIL' if failures else 'ok'} (11 cases)")
+    print(f"self-test: {'FAIL' if failures else 'ok'} (13 cases)")
     return 1 if failures else 0
 
 

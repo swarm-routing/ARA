@@ -168,7 +168,9 @@ kept 7 days.
 and collect steps above until every plan is collected (one line per plan
 per round, the cap shared, `--cells` checked at the end), and stops (exit 3)
 if `benchmark-cell.yml`'s dependencies move on the dispatch ref mid-campaign
-(#288, #289). A plan with `freeze: true` dispatches every cell at the tag
+(#288, #289), or (exit 5) if a `freeze: true` plan's state records no frozen
+ref after a dispatch, as with an `ns3-campaign` from before
+swarm-routing/sim-tools#368, which ignores the key (#125). A plan with `freeze: true` dispatches every cell at the tag
 `campaign/<generation>`, which its first `dispatch` creates; where the token
 may not create tags (this org's agent sessions), dispatch
 `.github/workflows/campaign-tag.yml` with the plan's `generation` and `ref`
