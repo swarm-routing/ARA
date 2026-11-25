@@ -189,6 +189,9 @@ private:
         std::uint32_t sequence = 0;  ///< of the latest FANT
         int retries = 0;
         bool demand = false;  ///< data for the destination arrived since that FANT
+        /// The pending timeout (#99): cancelled when the discovery ends
+        /// first, so a stale one never runs on a scheduler that cancels.
+        swarm::core::TimerHandle timer = swarm::core::kNoTimer;
     };
 
     /// A hop kept in a history, with the time it was recorded.
@@ -292,7 +295,11 @@ private:
     /// bufferDuringDiscovery, unless dataAsFant takes precedence.
     bool holdsData() const { return config_.bufferDuringDiscovery && !config_.dataAsFant; }
     void sendFant(NodeAddress dest, std::uint32_t sequence);
+    /// Schedules the timeout of `dest`'s discovery FANT `sequence` and keeps
+    /// its handle on the discovery.
     void scheduleTimeout(NodeAddress dest, std::uint32_t sequence, int retries);
+    /// Ends `dest`'s discovery, if any, cancelling its pending timeout.
+    void endDiscovery(NodeAddress dest);
     void onTimeout(NodeAddress dest, std::uint32_t sequence);
 
     NodeAddress self_;

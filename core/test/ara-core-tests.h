@@ -50,6 +50,8 @@ void TestResetForgetsEverything(Checker& c);
 void TestLazyDecayAgreesWithEager(Checker& c);
 void TestLazyDecayExpiresAtTheThreshold(Checker& c);
 void TestLazyDecayReclaimsUnreadEntries(Checker& c);
+void TestAnsweredDiscoveryCancelsItsTimeout(Checker& c);
+void TestResetCancelsTimeouts(Checker& c);
 void TestDataAsFantAtTheSource(Checker& c);
 void TestDataAsFantPrecedenceAndOff(Checker& c);
 

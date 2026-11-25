@@ -3,10 +3,10 @@
 #include "ara-header.h"
 
 #include "ns3/queue-item.h"
+#include "ns3/swarm-wire-buffer.h"
 
-#include <algorithm>
+#include <array>
 #include <cstdint>
-#include <vector>
 
 namespace ns3 {
 namespace ara {
@@ -30,19 +30,19 @@ uint32_t AntHeader::GetSerializedSize() const {
 }
 
 void AntHeader::Serialize(Buffer::Iterator start) const {
-    std::vector<uint8_t> bytes;
-    core::encodeAnt(m_ant, bytes);
-    start.Write(bytes.data(), static_cast<uint32_t>(bytes.size()));
+    // #99: straight into the packet's buffer, no vector.
+    BufferWireWriter w(start);
+    core::writeAnt(m_ant, w);
 }
 
 uint32_t AntHeader::Deserialize(Buffer::Iterator start) {
-    const uint32_t n = std::min(start.GetRemainingSize(), GetSerializedSize());
-    std::vector<uint8_t> bytes(n);
-    if (n > 0) start.Read(bytes.data(), n);  // data() may be null when empty
+    // #99: into a stack buffer; a short read decodes as invalid.
+    std::array<uint8_t, core::kAntWireSize> scratch{};
+    const auto bytes = ReadWireBytes(start, scratch, GetSerializedSize());
     const auto ant = core::decodeAnt(bytes);
     m_valid = ant.has_value();
     m_ant = ant.value_or(core::AntMessage{});
-    return n;
+    return static_cast<uint32_t>(bytes.size());
 }
 
 void AntHeader::Print(std::ostream& os) const {
@@ -63,8 +63,10 @@ Ptr<Packet> MakeAntPacket(const core::AntMessage& ant) {
 }
 
 std::optional<core::AntMessage> DecodeAntPacket(Ptr<const Packet> p) {
-    if (!p || p->GetSize() == 0) return std::nullopt;
-    std::vector<uint8_t> bytes(p->GetSize());
+    // A payload of any other size is short or has trailing bytes, which
+    // decodeAnt refuses: refused here without copying it (#99).
+    if (!p || p->GetSize() != core::kAntWireSize) return std::nullopt;
+    std::array<uint8_t, core::kAntWireSize> bytes{};
     p->CopyData(bytes.data(), static_cast<uint32_t>(bytes.size()));
     return core::decodeAnt(bytes);
 }

@@ -70,25 +70,48 @@ private:
 };
 
 /// The clock and timer ports as one discrete-event queue: events run in
-/// (time, scheduling order), so a run is fully deterministic.
+/// (time, scheduling order), so a run is fully deterministic. By default it
+/// keeps ITimerScheduler's scheduleCancellable and no-op cancel, as a
+/// scheduler that does not override them; setCancels(true) makes cancel
+/// remove the event (#99), so the core is tested on both kinds.
 class EventQueue : public swarm::core::IClock, public swarm::core::ITimerScheduler {
 public:
     Time now() const override { return now_; }
     void schedule(Time delay, std::function<void()> callback) override {
         events_.push(Event{now_ + (delay > 0.0 ? delay : 0.0), next_++, std::move(callback)});
     }
+    swarm::core::TimerHandle scheduleCancellable(Time delay,
+                                                 std::function<void()> callback) override {
+        if (!cancels_) return ITimerScheduler::scheduleCancellable(delay, std::move(callback));
+        const std::uint64_t order = next_;
+        schedule(delay, std::move(callback));
+        live_.insert(order);
+        return order + 1;  // never kNoTimer
+    }
+    void cancel(swarm::core::TimerHandle timer) override {
+        if (!cancels_ || timer == swarm::core::kNoTimer) return;
+        if (live_.erase(timer - 1) > 0) cancelled_.insert(timer - 1);
+    }
+    /// Set before anything is scheduled.
+    void setCancels(bool on) { cancels_ = on; }
     /// Runs every event due at or before `until`, then sets the clock to it.
     void runUntil(Time until) {
         while (!events_.empty() && events_.top().at <= until) {
             Event e = events_.top();
             events_.pop();
+            if (cancelled_.erase(e.order) > 0) continue;
+            live_.erase(e.order);
             now_ = e.at;
+            ++ran_;
             e.callback();
         }
         if (until > now_) now_ = until;
     }
     void advance(Time dt) { runUntil(now_ + dt); }
-    std::size_t pending() const { return events_.size(); }
+    /// Events still to run (a cancelled one is not).
+    std::size_t pending() const { return events_.size() - cancelled_.size(); }
+    /// Events run so far.
+    std::uint64_t ran() const { return ran_; }
 
 private:
     struct Event {
@@ -101,6 +124,10 @@ private:
     };
     Time now_ = 0.0;
     std::uint64_t next_ = 0;
+    std::uint64_t ran_ = 0;
+    bool cancels_ = false;
+    std::set<std::uint64_t> live_;       ///< cancellable events not yet run
+    std::set<std::uint64_t> cancelled_;  ///< cancelled events still queued
     std::priority_queue<Event, std::vector<Event>, std::greater<>> events_;
 };
 
