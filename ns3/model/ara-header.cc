@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include "ara-header.h"
 
+#include "ns3/queue-item.h"
+
 #include <algorithm>
 #include <cstdint>
 #include <vector>
@@ -68,6 +70,23 @@ std::optional<core::AntMessage> DecodeAntPacket(Ptr<const Packet> p) {
 }
 
 NS_OBJECT_ENSURE_REGISTERED(DataFlagTag);
+NS_OBJECT_ENSURE_REGISTERED(DataFlagFilter);
+
+TypeId DataFlagFilter::GetTypeId() {
+    static TypeId tid = TypeId("ns3::ara::DataFlagFilter")
+                            .SetParent<PacketFilter>()
+                            .SetGroupName("Ara")
+                            .AddConstructor<DataFlagFilter>();
+    return tid;
+}
+
+bool DataFlagFilter::CheckProtocol(Ptr<QueueDiscItem> item) const {
+    return item && item->GetPacket();
+}
+
+int32_t DataFlagFilter::DoClassify(Ptr<QueueDiscItem> item) const {
+    return ReadDataFlag(item->GetPacket()) == DataFlagTag::None ? PF_NO_MATCH : 0;
+}
 
 TypeId DataFlagTag::GetTypeId() {
     static TypeId tid = TypeId("ns3::ara::DataFlagTag")

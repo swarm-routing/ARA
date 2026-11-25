@@ -45,11 +45,17 @@
 #include "ns3/test.h"
 #include "ns3/udp-socket-factory.h"
 #include "ns3/uinteger.h"
+#include "ns3/ipv4-l3-protocol.h"
+#include "ns3/ipv4-queue-disc-item.h"
+#include "ns3/packet-filter.h"
+#include "ns3/queue-disc.h"
+#include "ns3/traffic-control-layer.h"
 #include "ns3/wifi-helper.h"
 #include "ns3/yans-wifi-helper.h"
 
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -787,7 +793,107 @@ private:
         BooleanValue retry;
         p->GetAttribute("OneRetryOnFailure", retry);
         NS_TEST_EXPECT_MSG_EQ(retry.Get(), c.oneRetryOnFailure, "OneRetryOnFailure");
+        BooleanValue prioritize;
+        p->GetAttribute("PrioritizeAnts", prioritize);
+        NS_TEST_EXPECT_MSG_EQ(prioritize.Get(), false, "PrioritizeAnts (an adapter switch, off)");
     }
+};
+
+/// PrioritizeAnts (#137). The filter: a data packet flagged Backtrack or
+/// DuplicateError goes to band 0, anything else to the priomap. On a 3-node
+/// line through AraHelper: with the switch on, every node's device gets the
+/// PrioQueueDisc, ants pass through band 0 and data through band 1, and
+/// delivery is unchanged; off, the device keeps the default FqCoDel.
+class PrioritizeAntsTestCase : public TestCase {
+public:
+    PrioritizeAntsTestCase()
+        : TestCase("switch: PrioritizeAnts, ants and flagged data in band 0 (#137)") {}
+
+private:
+    struct Line {
+        std::string rootType;
+        uint64_t band0 = 0;
+        uint64_t band1 = 0;
+        uint32_t received = 0;
+    };
+
+    void DoRun() override {
+        Ptr<ns3::ara::DataFlagFilter> filter = CreateObject<ns3::ara::DataFlagFilter>();
+        const auto band = [&](std::optional<ns3::ara::DataFlagTag::Flag> flag) {
+            Ptr<Packet> p = Create<Packet>(64);
+            if (flag) p->AddPacketTag(ns3::ara::DataFlagTag(*flag));
+            return filter->Classify(
+                Create<Ipv4QueueDiscItem>(p, Address(), Ipv4L3Protocol::PROT_NUMBER, Ipv4Header()));
+        };
+        NS_TEST_EXPECT_MSG_EQ(band(ns3::ara::DataFlagTag::Backtrack), 0, "Backtrack: band 0");
+        NS_TEST_EXPECT_MSG_EQ(band(ns3::ara::DataFlagTag::DuplicateError), 0,
+                              "DuplicateError: band 0");
+        const int32_t noMatch = PacketFilter::PF_NO_MATCH;
+        NS_TEST_EXPECT_MSG_EQ(band(ns3::ara::DataFlagTag::None), noMatch,
+                              "flag None: the priomap decides");
+        NS_TEST_EXPECT_MSG_EQ(band(std::nullopt), noMatch, "no flag: the priomap decides");
+
+        const Line on = Run(true);
+        NS_TEST_EXPECT_MSG_EQ(on.rootType, std::string("ns3::PrioQueueDisc"), "on: PrioQueueDisc");
+        NS_TEST_EXPECT_MSG_GT(on.band0, 0u, "on: the ants went through band 0");
+        NS_TEST_EXPECT_MSG_GT(on.band1, 0u, "on: the data went through band 1");
+        NS_TEST_EXPECT_MSG_EQ(on.received, 9u, "on: every packet after the discovery delivered");
+        const Line off = Run(false);
+        NS_TEST_EXPECT_MSG_EQ(off.rootType, std::string("ns3::FqCoDelQueueDisc"),
+                              "off: ns-3's default queue disc");
+        NS_TEST_EXPECT_MSG_EQ(off.received, 9u, "off: the same delivery");
+    }
+
+    Line Run(bool prioritize) {
+        m_line = Line{};
+        SwarmCoreSeed(1);
+        NodeContainer nodes;
+        nodes.Create(3);
+        NetDeviceContainer devs = LineOfWifiNodes(nodes);
+        AraHelper ara;
+        ara.Set("PrioritizeAnts", BooleanValue(prioritize));
+        ara.Install(nodes);
+        Ipv4AddressHelper a;
+        a.SetBase("10.1.0.0", "255.255.255.0");
+        Ipv4InterfaceContainer ifs = a.Assign(devs);
+        int64_t stream = ara.AssignStreams(nodes, 0);
+        stream += WifiHelper::AssignStreams(devs, stream);
+        InternetStackHelper().AssignStreams(nodes, stream);
+
+        Ptr<Socket> sink = Socket::CreateSocket(nodes.Get(2), UdpSocketFactory::GetTypeId());
+        sink->Bind(InetSocketAddress(Ipv4Address::GetAny(), kDataPort));
+        sink->SetRecvCallback(MakeCallback(&PrioritizeAntsTestCase::Receive, this));
+        Ptr<Socket> src = Socket::CreateSocket(nodes.Get(0), UdpSocketFactory::GetTypeId());
+        const Ipv4Address dst = ifs.GetAddress(2);
+        for (uint32_t k = 0; k < 10; ++k) {
+            Simulator::Schedule(Seconds(1.0 + 0.5 * k), [src, dst]() {
+                src->SendTo(Create<Packet>(64), 0, InetSocketAddress(dst, kDataPort));
+            });
+        }
+        Simulator::Stop(Seconds(8.0));
+        Simulator::Run();
+        Ptr<QueueDisc> root =
+            nodes.Get(0)->GetObject<TrafficControlLayer>()->GetRootQueueDiscOnDevice(devs.Get(0));
+        if (root) {
+            m_line.rootType = root->GetInstanceTypeId().GetName();
+            if (root->GetNQueueDiscClasses() == 2) {
+                m_line.band0 =
+                    root->GetQueueDiscClass(0)->GetQueueDisc()->GetStats().nTotalReceivedPackets;
+                m_line.band1 =
+                    root->GetQueueDiscClass(1)->GetQueueDisc()->GetStats().nTotalReceivedPackets;
+            }
+        }
+        Simulator::Destroy();
+        return m_line;
+    }
+
+    void Receive(Ptr<Socket> socket) {
+        while (socket->Recv()) {
+            ++m_line.received;
+        }
+    }
+
+    Line m_line;
 };
 
 /// FloodBackwardAnts on (#136): on the chain every node relays the BANT once
@@ -1021,6 +1127,7 @@ public:
         AddTestCase(new StatisticalSelectionTestCase, TestCase::Duration::QUICK);
         AddTestCase(new FloodBackwardAntsTestCase, TestCase::Duration::QUICK);
         AddTestCase(new OneRetryOnFailureTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new PrioritizeAntsTestCase, TestCase::Duration::QUICK);
     }
 };
 

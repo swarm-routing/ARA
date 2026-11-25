@@ -56,7 +56,7 @@ build_lib(
   HEADER_FILES
     model/ara-routing-protocol.h
     helper/ara-helper.h
-  LIBRARIES_TO_LINK ${libswarm-core} ${libcore} ${libnetwork} ${libinternet} ${ara_bench_libs}
+  LIBRARIES_TO_LINK ${libswarm-core} ${libcore} ${libnetwork} ${libinternet} ${libtraffic-control} ${ara_bench_libs}
   TEST_SOURCES
     ${ara_core_dir}/test/all-tests.cc
     ${ara_core_dir}/test/test-ant-codec.cc
