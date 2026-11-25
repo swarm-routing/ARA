@@ -56,8 +56,12 @@
 #include "ns3/traced-callback.h"
 
 #include <cstdint>
+#include <deque>
+#include <map>
 #include <memory>
 #include <optional>
+#include <set>
+#include <utility>
 
 namespace ara::core {
 class Router;
@@ -90,6 +94,10 @@ public:
 
     /// An ant this node sent: (core::AntType as its wire byte, broadcast).
     typedef void (*AntTxCallback)(uint8_t type, bool broadcast);
+
+    /// Keeps the node's Ipv4 (the base's is private), for DataAsFant's
+    /// delivery at the destination (#132), then hands it to the base.
+    void SetIpv4(Ptr<Ipv4> ipv4) override;
 
 protected:
     void DoInitialize() override;
@@ -129,6 +137,36 @@ private:
     bool m_oneRetry;
     /// The PrioritizeAnts attribute (#137): ants carry kAntPriority.
     bool m_prioritizeAnts;
+    /// The DataAsFant attribute: core Config dataAsFant (#132).
+    bool m_dataAsFant;
+    /// With DataAsFant (#132): the sequence numbers of the FANTs onLocalData
+    /// chose for this node's own packets with no trail, per destination, in
+    /// order (the rest of each FANT is this node, hops 0 and AntTtl);
+    /// StartDiscovery pairs them with the packets the base deferred (bounded
+    /// by HistoryCapacity per destination).
+    std::map<swarm::core::NodeAddress, std::deque<uint32_t>> m_pendingFants;
+    /// A FANT's identity: (its source, its sequence number).
+    using FantKey = std::pair<swarm::core::NodeAddress, uint32_t>;
+    /// At a relay: the data packet (IP header and payload) each received
+    /// FANT carried, until the core relays that FANT; oldest evicted first,
+    /// at most HistoryCapacity (org rule 7).
+    std::map<FantKey, Ptr<Packet>> m_carried;
+    std::deque<FantKey> m_carriedOrder;
+    /// At the destination: the FANTs whose data was delivered (once each),
+    /// bounded the same way.
+    std::set<FantKey> m_delivered;
+    std::deque<FantKey> m_deliveredOrder;
+    /// The node's Ipv4 (SetIpv4).
+    Ptr<Ipv4> m_ipv4Here;
+    /// With DataAsFant: sends each of this node's own deferred packets to
+    /// `dst` in a FANT onLocalData chose; the rest are dropped as before.
+    void SendDataFants(Ipv4Address dst);
+    /// With DataAsFant: hands the carried IP packet `ip` up this node's stack
+    /// on the interface toward `from` (Ipv4L3Protocol::Receive), so the
+    /// normal input path delivers it.
+    void DeliverCarried(Ptr<Packet> ip, Ipv4Address from);
+    /// A FANT, with the priority tag when PrioritizeAnts is on.
+    Ptr<Packet> TagAnt(Ptr<Packet> p) const;
     /// The core's constants (core/ara-config.h), one attribute each (#108),
     /// copied into the router's Config by DoInitialize. Their defaults are
     /// core::Config's, read in GetTypeId and in the constructor, never typed

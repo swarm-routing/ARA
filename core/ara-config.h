@@ -89,6 +89,16 @@ struct Config {
     /// the packet's data-history entry (bounded, expiring), created for a
     /// source's own packet.
     bool oneRetryOnFailure = false;
+    /// Fidelity "Data packets waiting for a route": off, a source's packet
+    /// with no trail is dropped and a minimal FANT goes out (or it is held,
+    /// with bufferDuringDiscovery). On (a repo switch, #132; the reading
+    /// accepted by the maintainer 2026-11-24, amended 2026-11-25), every such
+    /// packet goes out as a FANT carrying it, as the 2002 version did ([GS03]
+    /// §4.5): onLocalData answers Broadcast with a FANT of a new sequence
+    /// number, the first packet and every later one while the discovery runs,
+    /// and the discovery timer sends no FANT of its own. Takes precedence over
+    /// bufferDuringDiscovery. The adapter carries the data behind the FANT.
+    bool dataAsFant = false;
 };
 
 }  // namespace ara::core

@@ -9,7 +9,10 @@
 #include "ns3/boolean.h"
 #include "ns3/double.h"
 #include "ns3/integer.h"
+#include "ns3/ipv4-interface-address.h"
+#include "ns3/ipv4-l3-protocol.h"
 #include "ns3/log.h"
+#include "ns3/net-device.h"
 #include "ns3/socket.h"
 #include "ns3/uinteger.h"
 
@@ -75,6 +78,14 @@ TypeId RoutingProtocol::GetTypeId() {
                               "queue disc).",
                               BooleanValue(false),
                               MakeBooleanAccessor(&RoutingProtocol::m_prioritizeAnts),
+                              MakeBooleanChecker())
+                .AddAttribute("DataAsFant",
+                              "A source's packet with no trail goes out as a FANT carrying it, "
+                              "every one while the discovery runs, and the destination delivers "
+                              "it (core Config dataAsFant, [GS03] 4.5 on the 2002 version, #132; "
+                              "off: dropped, or held with BufferDuringDiscovery).",
+                              BooleanValue(d.dataAsFant),
+                              MakeBooleanAccessor(&RoutingProtocol::m_dataAsFant),
                               MakeBooleanChecker())
                 .AddAttribute("EvaporationRate",
                               "Evaporation rate q of eq. 2, phi := (1 - q) phi per "
@@ -164,7 +175,8 @@ RoutingProtocol::RoutingProtocol()
     : m_buffer(core::Config{}.bufferDuringDiscovery),
       m_statistical(core::Config{}.statisticalPathSelection),
       m_floodBants(core::Config{}.floodBackwardAnts), m_oneRetry(core::Config{}.oneRetryOnFailure),
-      m_prioritizeAnts(false), m_evaporationRate(core::Config{}.evaporationRate),
+      m_prioritizeAnts(false), m_dataAsFant(core::Config{}.dataAsFant),
+      m_evaporationRate(core::Config{}.evaporationRate),
       m_evaporationPeriod(core::Config{}.evaporationPeriod), m_deposit(core::Config{}.deposit),
       m_expiryThreshold(core::Config{}.expiryThreshold), m_antTtl(core::Config{}.antTtl),
       m_relayJitterMax(core::Config{}.relayJitterMax),
@@ -200,6 +212,7 @@ void RoutingProtocol::DoInitialize() {
     config.statisticalPathSelection = m_statistical;
     config.floodBackwardAnts = m_floodBants;
     config.oneRetryOnFailure = m_oneRetry;
+    config.dataAsFant = m_dataAsFant;
     m_router = std::make_unique<core::Router>(
         self, config, m_clock, Rng(), Timers(), [this](const core::AntDecision& d) {
             if (d.message) {
@@ -209,14 +222,19 @@ void RoutingProtocol::DoInitialize() {
             // With PrioritizeAnts (#137) the ant carries kAntPriority, which
             // the UDP send keeps (the control socket's own priority is 0)
             // and the PrioQueueDisc's priomap sends to band 0.
+            // With DataAsFant (#132), a FANT this node relays goes with the
+            // data packet it carried when it arrived.
             const bool done = Execute(d, [this](const core::AntMessage& ant) {
-                Ptr<Packet> p = MakeAntPacket(ant);
-                if (m_prioritizeAnts) {
-                    SocketPriorityTag tag;
-                    tag.SetPriority(kAntPriority);
-                    p->ReplacePacketTag(tag);
+                if (m_dataAsFant && ant.type == core::AntType::Forward) {
+                    const auto it = m_carried.find({ant.source, ant.sequence});
+                    if (it != m_carried.end()) {
+                        Ptr<Packet> p = it->second;
+                        m_carried.erase(it);
+                        p->AddHeader(AntHeader(ant));
+                        return TagAnt(p);
+                    }
                 }
-                return p;
+                return TagAnt(MakeAntPacket(ant));
             });
             NS_ASSERT_MSG(done &&
                               (d.message || d.action == swarm::core::RouteAction::DiscardPending),
@@ -244,6 +262,12 @@ void RoutingProtocol::DoNodeCrash() {
         m_router->reset();
     }
     m_transitNoTrail.reset();
+    // DataAsFant (#132): a restarted node carries no FANT's data either.
+    m_pendingFants.clear();
+    m_carried.clear();
+    m_carriedOrder.clear();
+    m_delivered.clear();
+    m_deliveredOrder.clear();
 }
 
 Ipv4Address RoutingProtocol::NextHop(Ipv4Address dst) {
@@ -267,6 +291,16 @@ Ipv4Address RoutingProtocol::SelectNextHop(Ipv4Address dst, Ipv4Address /*src*/,
             return Ipv4Address();
         }
         const core::AntDecision d = m_router->onLocalData(dest);
+        if (d.action == swarm::core::RouteAction::Broadcast && d.message) {
+            // DataAsFant (#132): no route here, so the base defers the
+            // packet and calls StartDiscovery, which sends it in this FANT.
+            std::deque<uint32_t>& pending = m_pendingFants[dest];
+            pending.push_back(d.message->sequence);
+            while (pending.size() > m_historyCapacity) {
+                pending.pop_front();  // org rule 7
+            }
+            return Ipv4Address();
+        }
         return d.action == swarm::core::RouteAction::Unicast ? ToIpv4Address(d.nextHop)
                                                              : Ipv4Address();
     }
@@ -288,6 +322,10 @@ void RoutingProtocol::StartDiscovery(Ipv4Address dst) {
     // started by onLocalData; a relay starts none (a packet whose link fails
     // backtracks instead, [G02] §3.3: OnDataUndelivered).
     const std::optional<uint64_t> transit = std::exchange(m_transitNoTrail, std::nullopt);
+    if (m_router && m_dataAsFant) {
+        SendDataFants(dst);  // #132; takes precedence over buffering
+        return;
+    }
     if (m_router && m_buffer) {
         // Buffering (#5): held while this node's discovery for dst runs. The
         // loopback hop between RouteOutput and here is an event of its own,
@@ -431,15 +469,123 @@ void RoutingProtocol::OnDataForwarded(Ptr<const Packet> p, const Ipv4Header& hea
 
 void RoutingProtocol::RecvControl(Ptr<Packet> p, Ipv4Address from, Ipv4Address /*receiver*/) {
     if (!m_router) return;
-    const auto ant = DecodeAntPacket(p);
+    // With DataAsFant (#132) a FANT may carry a data packet behind its
+    // header: its presence is read from the length. Anything else is decoded
+    // as exactly one ant, as before.
+    std::optional<core::AntMessage> ant;
+    Ptr<Packet> carried;
+    if (m_dataAsFant && p->GetSize() > core::kAntWireSize) {
+        Ptr<Packet> c = p->Copy();
+        AntHeader h;
+        c->RemoveHeader(h);
+        if (h.IsValid() && h.Get().type == core::AntType::Forward) {
+            ant = h.Get();
+            carried = c;
+        }
+    } else {
+        ant = DecodeAntPacket(p);
+    }
     if (!ant) {
         NS_LOG_DEBUG("dropped a malformed ant from " << from);
         return;
+    }
+    if (carried && ant->source != m_router->self()) {
+        const FantKey key{ant->source, ant->sequence};
+        if (ant->destination == m_router->self()) {
+            // The destination delivers the data once per FANT.
+            if (m_delivered.insert(key).second) {
+                m_deliveredOrder.push_back(key);
+                while (m_deliveredOrder.size() > m_historyCapacity) {
+                    m_delivered.erase(m_deliveredOrder.front());
+                    m_deliveredOrder.pop_front();
+                }
+                DeliverCarried(carried, from);
+            }
+        } else if (m_carried.emplace(key, carried).second) {
+            // A relay keeps it for the core's relay of this FANT (the first
+            // copy only, as the core relays only that one).
+            m_carriedOrder.push_back(key);
+            while (m_carriedOrder.size() > m_historyCapacity) {
+                m_carried.erase(m_carriedOrder.front());
+                m_carriedOrder.pop_front();
+            }
+        }
     }
     m_router->onAnt(*ant, ToNodeAddress(from));
     // A FANT lays a trail toward its source, a BANT toward its source (the
     // destination of the discovery): data held for it can go (buffering, #5).
     ReleaseIfRouted(ToIpv4Address(ant->source));
+}
+
+void RoutingProtocol::SetIpv4(Ptr<Ipv4> ipv4) {
+    m_ipv4Here = ipv4;
+    SwarmRoutingBase::SetIpv4(ipv4);
+}
+
+Ptr<Packet> RoutingProtocol::TagAnt(Ptr<Packet> p) const {
+    // With PrioritizeAnts (#137) the ant carries kAntPriority, which the UDP
+    // send keeps (the control socket's own priority is 0) and the
+    // PrioQueueDisc's priomap sends to band 0.
+    if (m_prioritizeAnts) {
+        SocketPriorityTag tag;
+        tag.SetPriority(kAntPriority);
+        p->ReplacePacketTag(tag);
+    }
+    return p;
+}
+
+void RoutingProtocol::SendDataFants(Ipv4Address dst) {
+    // #132: each of this node's own packets the base deferred for dst goes
+    // out in the FANT onLocalData chose for it, in order: the ant header,
+    // then the IP header and payload. Anything else held for dst (a transit
+    // packet with no trail, or an own packet with no FANT left, which the
+    // discovery cap refused) is dropped, as without the switch.
+    const swarm::core::NodeAddress dest = ToNodeAddress(dst);
+    std::deque<uint32_t>& pending = m_pendingFants[dest];
+    std::vector<DeferredPacket> rest;
+    for (DeferredPacket& e : GetDeferredQueue()->Release(dst)) {
+        if (pending.empty() || !IsMyAddress(e.header.GetSource())) {
+            rest.push_back(std::move(e));
+            continue;
+        }
+        const core::AntMessage fant{
+            core::AntType::Forward, m_router->self(), dest, pending.front(), 0, m_antTtl};
+        pending.pop_front();
+        Ptr<Packet> p = e.packet->Copy();
+        p->AddHeader(e.header);
+        p->AddHeader(AntHeader(fant));
+        m_antTx(static_cast<uint8_t>(fant.type), true);
+        BroadcastControl(TagAnt(p));
+    }
+    if (pending.empty()) {
+        m_pendingFants.erase(dest);
+    }
+    if (!rest.empty()) {
+        GetDeferredQueue()->Requeue(std::move(rest));
+        DiscardDeferred(dst);
+    }
+}
+
+void RoutingProtocol::DeliverCarried(Ptr<Packet> ip, Ipv4Address from) {
+    // #132 (item 3 as amended 2026-11-25): Ipv4L3Protocol::LocalDeliver is
+    // private, so the carried packet enters this node's stack the way a frame
+    // does, on the interface whose subnet holds `from`; RouteInput then
+    // delivers it (the base's OnDataReceived, the core's Deliver).
+    Ptr<Ipv4L3Protocol> l3 = DynamicCast<Ipv4L3Protocol>(m_ipv4Here);
+    if (!l3) return;
+    for (uint32_t i = 0; i < l3->GetNInterfaces(); ++i) {
+        for (uint32_t a = 0; a < l3->GetNAddresses(i); ++a) {
+            const Ipv4InterfaceAddress ifa = l3->GetAddress(i, a);
+            if (ifa.GetLocal() == Ipv4Address::GetLoopback() ||
+                ifa.GetLocal().CombineMask(ifa.GetMask()) != from.CombineMask(ifa.GetMask())) {
+                continue;
+            }
+            Ptr<NetDevice> dev = l3->GetNetDevice(i);
+            l3->Receive(dev, ip, Ipv4L3Protocol::PROT_NUMBER, dev->GetAddress(), dev->GetAddress(),
+                        NetDevice::PACKET_HOST);
+            return;
+        }
+    }
 }
 
 }  // namespace ara
