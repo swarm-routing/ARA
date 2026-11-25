@@ -99,6 +99,17 @@ struct Config {
     /// and the discovery timer sends no FANT of its own. Takes precedence over
     /// bufferDuringDiscovery. The adapter carries the data behind the FANT.
     bool dataAsFant = false;
+    /// Fidelity "Evaporation by eq. 2": off, every read or write first ages
+    /// the whole table to now (one pass). On (a repo switch, #50), it ages
+    /// only the row of the destination it touches, from that row's own
+    /// timestamp: the same law, ϕ·(1 − q)^(Δt / period), equal on every read
+    /// up to floating-point rounding. An entry never read is no longer
+    /// dropped when it decays below expiryThreshold: it keeps its slot until
+    /// its row is touched, or until a write is refused for a full table, which
+    /// first ages every row (and drops what expired) and then retries. Not
+    /// byte-identical to off (rounding, expiry timing, the observer's state
+    /// size).
+    bool lazyDecay = false;
 };
 
 }  // namespace ara::core

@@ -138,6 +138,7 @@ if(ARA_CORE_TESTS)
     test/test-data-fant.cc
     test/test-failure.cc
     test/test-flood-bant.cc
+    test/test-lazy-decay.cc
     test/test-lifecycle.cc
     test/test-maintenance.cc
     test/test-network.cc

@@ -129,6 +129,61 @@ void Router::age() {
     reportState();
 }
 
+// The same law, row by row, with lazyDecay (#50): only the row an event
+// touches is aged, from its own timestamp, so the cost is that row's, not the
+// table's. ϕ·r^a·r^b is not bit-equal to ϕ·r^(a+b), and an entry never read
+// keeps its slot below the threshold until its row is touched or reclaim()
+// runs (fidelity "Evaporation by eq. 2").
+void Router::age(NodeAddress dest) {
+    if (!config_.lazyDecay) {
+        age();
+        return;
+    }
+    ageRow(dest);
+}
+
+void Router::ageRow(NodeAddress dest) {
+    const auto row = table_.row(dest);
+    if (row.empty()) {
+        rowAged_.erase(dest);
+        return;
+    }
+    const Time now = clock_.now();
+    const auto [it, fresh] = rowAged_.try_emplace(dest, now);
+    if (fresh || !(now > it->second)) return;
+    const double retain = swarm::core::evaporationFactor(
+        1.0 - config_.evaporationRate, now - it->second, config_.evaporationPeriod);
+    it->second = now;
+    if (!(retain >= 0.0 && retain <= 1.0)) return;  // as evaporate(): nothing changes
+    rowScratch_.assign(row.begin(), row.end());
+    bool removed = false;
+    for (const auto& e : rowScratch_) {
+        // evaporate()'s multiplication and comparison, entry by entry.
+        const double value = e.value * retain;
+        if (value < config_.expiryThreshold) {
+            table_.erase(dest, e.neighbor);
+            removed = true;
+            if (observer_) observer_->onRouteChanged(dest, e.neighbor, false);
+        } else {
+            table_.set(dest, e.neighbor, value);
+        }
+    }
+    if (table_.row(dest).empty()) rowAged_.erase(dest);
+    if (removed && observer_) reportState();
+}
+
+bool Router::reclaim() {
+    if (!config_.lazyDecay || !table_.full()) return false;
+    const std::size_t before = table_.size();
+    for (const NodeAddress dest : table_.destinations())
+        ageRow(dest);
+    return table_.size() < before;
+}
+
+void Router::stamp(NodeAddress dest) {
+    if (config_.lazyDecay && !table_.row(dest).empty()) rowAged_.try_emplace(dest, clock_.now());
+}
+
 void Router::setObserver(swarm::core::IRouterObserver* observer) {
     observer_ = observer;
     reportedEntries_.reset();
@@ -153,6 +208,7 @@ void Router::reset() {
     dataHistory_.clear();
     discoveries_.clear();
     weights_.clear();
+    rowAged_.clear();
     lastAged_ = clock_.now();
     if (observer_) {
         for (const auto& [dest, over] : expiring_)
@@ -188,13 +244,18 @@ void Router::reportState() {
 
 void Router::setTrail(NodeAddress dest, NodeAddress over, double value) {
     const bool existed = table_.contains(dest, over);
-    table_.set(dest, over, value);  // refused when full: no trail (org rule 7)
+    // Refused when full: no trail (org rule 7); with lazyDecay, once more
+    // after reclaiming what expired unread (#50).
+    if (!table_.set(dest, over, value) && reclaim()) table_.set(dest, over, value);
+    stamp(dest);
     trailWritten(dest, over, existed);
 }
 
 void Router::addTrail(NodeAddress dest, NodeAddress over, double delta) {
     const bool existed = table_.contains(dest, over);
-    table_.add(dest, over, delta);  // refused when full (org rule 7)
+    // Refused when full (org rule 7); with lazyDecay, retried as setTrail.
+    if (!table_.add(dest, over, delta) && reclaim()) table_.add(dest, over, delta);
+    stamp(dest);
     trailWritten(dest, over, existed);
 }
 
@@ -238,7 +299,7 @@ void Router::layTrail(NodeAddress toward, NodeAddress over, std::uint8_t hops) {
 // this node itself, and nothing over an unknown neighbour.
 void Router::reinforce(NodeAddress toward, NodeAddress over) {
     if (toward == self_ || toward == kInvalidAddress || over == kInvalidAddress) return;
-    age();
+    age(toward);
     addTrail(toward, over, config_.deposit);
 }
 
@@ -251,18 +312,18 @@ void Router::onDataReceived(NodeAddress source, NodeAddress prev) {
 }
 
 NodeAddress Router::nextHop(NodeAddress dest) {
-    age();
+    age(dest);
     return bestHop(dest);
 }
 
 double Router::pheromone(NodeAddress dest, NodeAddress neighbor) {
-    age();
+    age(dest);
     return table_.get(dest, neighbor);
 }
 
 AntDecision Router::onTransitData(NodeAddress dest, NodeAddress prev) {
     if (dest == self_) return decided(AntDecision::deliver(), dest);
-    age();
+    age(dest);
     const NodeAddress hop = dataHop(dest, prev);
     if (hop != kInvalidAddress) {
         return decided({swarm::core::RouteAction::Unicast, hop, std::nullopt}, dest);
@@ -272,7 +333,7 @@ AntDecision Router::onTransitData(NodeAddress dest, NodeAddress prev) {
 
 AntDecision Router::onLocalData(NodeAddress dest) {
     if (dest == self_) return decided(AntDecision::deliver(), dest);
-    age();
+    age(dest);
     const NodeAddress hop = dataHop(dest, kInvalidAddress);  // the source: no previous hop
     if (hop != kInvalidAddress) {
         return decided({swarm::core::RouteAction::Unicast, hop, std::nullopt}, dest);
@@ -297,7 +358,7 @@ void Router::onAnt(const AntMessage& ant, NodeAddress from) {
                                      static_cast<std::uint32_t>(kAntWireSize));
     }
     if (ant.source == self_) return;
-    age();
+    age(ant.source);  // both ants touch only the row toward their source
     if (ant.type == AntType::Forward) {
         onForwardAnt(ant, from);
     } else {
@@ -432,7 +493,7 @@ void Router::scheduleTimeout(NodeAddress dest, std::uint32_t sequence, int retri
 void Router::onTimeout(NodeAddress dest, std::uint32_t sequence) {
     const auto it = discoveries_.find(dest);
     if (it == discoveries_.end() || it->second.sequence != sequence) return;  // answered or stale
-    age();
+    age(dest);
     Discovery& d = it->second;
     const bool routed = bestHop(dest) != kInvalidAddress;
     // With dataAsFant (#132) the data itself carries the FANTs: no retry.
@@ -460,14 +521,14 @@ bool Router::admitData(const DataKey& key, NodeAddress prev) {
 void Router::onDuplicateError(NodeAddress dest, NodeAddress from) {
     // Fidelity "Loop prevention": the sender of the duplicate deactivates
     // that link. The packet itself is a copy of one still on its way: dropped.
-    age();
+    age(dest);
     dropTrail(dest, from);
 }
 
 FailureDecision Router::onRouteFailure(const DataKey& key, NodeAddress failed,
                                        NodeAddress cameFrom) {
     const NodeAddress dest = key.dest;
-    age();
+    age(dest);
     dropTrail(dest, failed);  // fidelity "On a failed link": its ϕ to 0
     // Another link, but not back where the packet came from: unflagged, the
     // previous hop would take it for a loop (DUPLICATE_ERROR) and drop it.
@@ -506,6 +567,7 @@ NodeAddress Router::bestHopExcept(NodeAddress dest, NodeAddress except) const {
 
 void Router::dropTrail(NodeAddress dest, NodeAddress over) {
     if (!table_.erase(dest, over)) return;
+    if (table_.row(dest).empty()) rowAged_.erase(dest);  // lazyDecay's stamp, if any
     if (observer_) {
         observer_->onRouteChanged(dest, over, false);
         reportState();

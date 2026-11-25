@@ -47,6 +47,9 @@ void TestFloodedBantRelay(Checker& c);
 void TestOneRetryAtARelay(Checker& c);
 void TestOneRetryAtTheSourceAndEviction(Checker& c);
 void TestResetForgetsEverything(Checker& c);
+void TestLazyDecayAgreesWithEager(Checker& c);
+void TestLazyDecayExpiresAtTheThreshold(Checker& c);
+void TestLazyDecayReclaimsUnreadEntries(Checker& c);
 void TestDataAsFantAtTheSource(Checker& c);
 void TestDataAsFantPrecedenceAndOff(Checker& c);
 
