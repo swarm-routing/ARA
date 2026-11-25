@@ -89,6 +89,9 @@ public:
     /// the packet counts as demand for its next retry (#5); and the packet is
     /// dropped (no buffering, fidelity "Data packets waiting for a route"),
     /// or, with bufferDuringDiscovery and a discovery running, held: Queue.
+    /// With dataAsFant (#132), no trail answers Broadcast with the FANT the
+    /// packet is to travel in (a new sequence number, the discovery started
+    /// or renewed), unless the discovery cap refuses it: then Drop.
     AntDecision onLocalData(NodeAddress dest);
 
     /// A data packet for `dest` that arrived from the neighbour `prev` and is
@@ -154,10 +157,9 @@ public:
 
     /// True when this node's own data for `dest` with no trail is held, not
     /// dropped (onLocalData's Queue): with bufferDuringDiscovery, while this
-    /// node's discovery for `dest` runs. Transit data is never held.
-    bool holds(NodeAddress dest) const {
-        return config_.bufferDuringDiscovery && discovering(dest);
-    }
+    /// node's discovery for `dest` runs. Transit data is never held, and
+    /// nothing is with dataAsFant, which takes precedence (#132).
+    bool holds(NodeAddress dest) const { return holdsData() && discovering(dest); }
 
     NodeAddress self() const { return self_; }
 
@@ -274,6 +276,10 @@ private:
     void onForwardAnt(const AntMessage& ant, NodeAddress from);
     void onBackwardAnt(const AntMessage& ant, NodeAddress from);
     void startDiscovery(NodeAddress dest);
+    /// onLocalData's answer with dataAsFant and no trail (#132).
+    AntDecision dataFant(NodeAddress dest);
+    /// bufferDuringDiscovery, unless dataAsFant takes precedence.
+    bool holdsData() const { return config_.bufferDuringDiscovery && !config_.dataAsFant; }
     void sendFant(NodeAddress dest, std::uint32_t sequence);
     void scheduleTimeout(NodeAddress dest, std::uint32_t sequence, int retries);
     void onTimeout(NodeAddress dest, std::uint32_t sequence);

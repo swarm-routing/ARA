@@ -60,6 +60,7 @@ build_lib(
   TEST_SOURCES
     ${ara_core_dir}/test/all-tests.cc
     ${ara_core_dir}/test/test-ant-codec.cc
+    ${ara_core_dir}/test/test-data-fant.cc
     ${ara_core_dir}/test/test-failure.cc
     ${ara_core_dir}/test/test-flood-bant.cc
     ${ara_core_dir}/test/test-lifecycle.cc

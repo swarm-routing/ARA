@@ -797,6 +797,30 @@ private:
         BooleanValue prioritize;
         p->GetAttribute("PrioritizeAnts", prioritize);
         NS_TEST_EXPECT_MSG_EQ(prioritize.Get(), false, "PrioritizeAnts (an adapter switch, off)");
+        BooleanValue dataAsFant;
+        p->GetAttribute("DataAsFant", dataAsFant);
+        NS_TEST_EXPECT_MSG_EQ(dataAsFant.Get(), c.dataAsFant, "DataAsFant");
+    }
+};
+
+/// DataAsFant on (#132): on the 4-node chain the first packet, which finds no
+/// trail, travels in the FANT and is delivered at the destination (20 of 20,
+/// where the default drops it: 19), the later ones take the trail, and a seed
+/// still fixes the run.
+class DataAsFantTestCase : public TestCase {
+public:
+    DataAsFantTestCase()
+        : TestCase("switch: DataAsFant, the first packet delivered inside its FANT (#132)") {}
+
+private:
+    void DoRun() override {
+        const ChainRun a = Chain().With("DataAsFant", "true").Run(1, 20);
+        const ChainRun b = Chain().With("DataAsFant", "true").Run(1, 20);
+        NS_TEST_ASSERT_MSG_EQ(a.sent, 20u, "packets sent");
+        NS_TEST_EXPECT_MSG_EQ(a.received, 20u, "every packet delivered, the first in its FANT");
+        NS_TEST_EXPECT_MSG_GT(a.bants, 0u, "the destination answered with a BANT");
+        NS_TEST_EXPECT_MSG_EQ(a.nextHop0, a.expect0, "node 0 routes to node 3 over node 1");
+        NS_TEST_EXPECT_MSG_EQ((a.trace == b.trace), true, "seed 1 twice: identical");
     }
 };
 
@@ -1223,6 +1247,7 @@ public:
         AddTestCase(new FloodBackwardAntsTestCase, TestCase::Duration::QUICK);
         AddTestCase(new OneRetryOnFailureTestCase, TestCase::Duration::QUICK);
         AddTestCase(new LifecycleTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new DataAsFantTestCase, TestCase::Duration::QUICK);
         AddTestCase(new PrioritizeAntsTestCase, TestCase::Duration::QUICK);
     }
 };

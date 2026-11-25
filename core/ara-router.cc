@@ -277,6 +277,7 @@ AntDecision Router::onLocalData(NodeAddress dest) {
     if (hop != kInvalidAddress) {
         return decided({swarm::core::RouteAction::Unicast, hop, std::nullopt}, dest);
     }
+    if (config_.dataAsFant) return dataFant(dest);
     if (auto it = discoveries_.find(dest); it != discoveries_.end()) {
         it->second.demand = true;  // #5: the source keeps sending
     } else {
@@ -374,6 +375,33 @@ void Router::onBackwardAnt(const AntMessage& ant, NodeAddress from) {
     emit(AntDecision::unicast(back, relay));
 }
 
+// Fidelity "Data packets waiting for a route", the switch (#132): the packet
+// is the FANT ([GS03] §4.5, the 2002 version: "ARA used the first packet of a
+// connection as the FANT", and packets arriving during discovery made more
+// FANTs). A new sequence number per packet; the first one starts the
+// discovery and its timeout, which ends it with no retry FANT (onTimeout).
+// The FANT goes back to the caller, not through the sink: the adapter sends
+// it with the data packet behind it. The source records it, so its echoes
+// are dropped, and reports it to the observer as any ant it sends.
+AntDecision Router::dataFant(NodeAddress dest) {
+    const auto it = discoveries_.find(dest);
+    if (it == discoveries_.end() && discoveries_.size() >= config_.maxDiscoveries) {
+        return decided(AntDecision::drop(), dest);  // "Concurrent discoveries per node"
+    }
+    const std::uint32_t sequence = nextSequence_++;
+    if (it == discoveries_.end()) {
+        discoveries_[dest] = Discovery{sequence, 0, false};
+        scheduleTimeout(dest, sequence, 0);
+    }
+    fantHistory_.record(self_, sequence, clock_.now());
+    const AntMessage fant{AntType::Forward, self_, dest, sequence, 0, config_.antTtl};
+    if (observer_) {
+        observer_->onControlSent(static_cast<std::uint8_t>(fant.type), true,
+                                 static_cast<std::uint32_t>(kAntWireSize));
+    }
+    return decided(AntDecision::broadcast(fant), dest);
+}
+
 void Router::startDiscovery(NodeAddress dest) {
     // Fidelity "Concurrent discoveries per node": none beyond the cap.
     if (discoveries_.size() >= config_.maxDiscoveries) return;
@@ -407,10 +435,11 @@ void Router::onTimeout(NodeAddress dest, std::uint32_t sequence) {
     age();
     Discovery& d = it->second;
     const bool routed = bestHop(dest) != kInvalidAddress;
-    if (routed || !d.demand || d.retries >= config_.maxDiscoveryRetries) {
+    // With dataAsFant (#132) the data itself carries the FANTs: no retry.
+    if (routed || !d.demand || d.retries >= config_.maxDiscoveryRetries || config_.dataAsFant) {
         discoveries_.erase(it);
         // Ended with no trail: the data held for it goes too.
-        if (!routed && config_.bufferDuringDiscovery) emit(AntDecision::discardPending(dest));
+        if (!routed && holdsData()) emit(AntDecision::discardPending(dest));
         return;
     }
     const int retries = ++d.retries;
