@@ -1,3 +1,29 @@
+## v0.3.0 (2026-11-26)
+
+### Feat
+
+- **bench**: pre-register the 2003 anchor, anchor-2003.yaml (#298)
+- **bench**: a campaign feeder with a dependency guard, and a local perf run (#293)
+- **core**: lazy per-row pheromone decay behind a default-off switch (#286)
+- **core**: data sent as the FANT behind a default-off switch (#280)
+- **core**: clear and restart on node shutdown, crash and start (#281)
+- **ns3**: prioritized ants and flagged data behind a default-off switch (#274)
+- **core**: one more try on a failed link behind a default-off switch (#269)
+- **core**: flooded BANTs behind a default-off switch (#266)
+- **core**: statistical path selection behind a default-off switch (#264)
+
+### Fix
+
+- **bench**: feed.py stops when a freeze: true plan is dispatched unfrozen (#299)
+- **bench**: feed.py prints each round as it happens (#295)
+- **core**: a reset drops the FANT relays scheduled before it (#291)
+- **bench**: check_plan_deps compares the lock with the adapter's own lock (#290)
+- **make**: core-test builds each swarm-core source in its own directory (#203)
+
+### Perf
+
+- non-allocating ant header path and cancellable discovery timeouts (#284)
+
 ## v0.2.1 (2026-11-16)
 
 ### Feat
