@@ -7,7 +7,7 @@
 # (helper/ara-bench-arms.cc, compiled only when routing-bench is installed
 # beside it), an example and the test suite. Install it next to swarm-core:
 #
-#   ns3-build-contrib --test swarm-core=/src/ns3-swarm-core ara=/src/ara/ns3
+#   ns3-build-contrib --test swarm-core=/src/swarm-adapter-ns3 ara=/src/ara/ns3
 #
 # ns-3 reaches this directory through contrib/ara, a link to the checkout's
 # ns3/: core/ is found beside the link's target, not beside the link.

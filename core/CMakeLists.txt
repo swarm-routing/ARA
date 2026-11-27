@@ -152,8 +152,15 @@ if(ARA_CORE_TESTS)
   target_link_libraries(ara_core_tests PRIVATE ara_core)
   target_compile_options(ara_core_tests PRIVATE ${ARA_WARNINGS})
 
+  # swarm-core's protocol contract suite on ARA's router (#296): header-only,
+  # testbench/swarm-contract-tests.h from the swarm-core release the build uses.
+  add_executable(ara_core_contract test/test-contract.cc)
+  target_link_libraries(ara_core_contract PRIVATE ara_core)
+  target_compile_options(ara_core_contract PRIVATE ${ARA_WARNINGS})
+
   enable_testing()
   add_test(NAME ara-core COMMAND ara_core_tests)
+  add_test(NAME ara-core-contract COMMAND ara_core_contract)
 endif()
 
 if(ARA_CORE_BENCH)
