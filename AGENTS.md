@@ -96,20 +96,23 @@ CONTRIBUTING invariant 7). The
 same locally:
 
 ```bash
-docker run --rm -v "$PWD:/src/ara:ro" -v "$PWD/../ns3-swarm-core:/src/ns3-swarm-core:ro" \
+docker run --rm -v "$PWD:/src/ara:ro" -v "$PWD/../swarm-adapter-ns3:/src/swarm-adapter-ns3:ro" \
     ghcr.io/swarm-routing/ns3-dev:latest-debug \
     ns3-build-contrib --strict-warnings --quality-modules ara --test \
-    swarm-core=/src/ns3-swarm-core ara=/src/ara/ns3
+    swarm-core=/src/swarm-adapter-ns3 ara=/src/ara/ns3
 ```
 
-(`make test` does the same with `SWARM_CORE_NS3=<checkout>`, default
-`../ns3-swarm-core`). To build the harness arm and run it in the same
+(`make test` does the same on `SWARM_ADAPTER_NS3=<checkout>` of
+swarm-routing/swarm-adapter-ns3, default `../swarm-adapter-ns3`, cloned at
+`SWARM_ADAPTER_REF` when missing: the tag `ns3.yml`'s `dependencies:` pins,
+read from the workflow; an existing checkout is used as it is, with a warning
+when it is not at that tag). To build the harness arm and run it in the same
 container, also mount `swarm-routing/ns3-tools` at `/src/ns3-tools`, add
 `routing-bench=/src/ns3-tools/ns3/routing-bench` before `ara=`, and pass
 `--run "routing-compare --scenario=paper --nNodes=20 --time=30 --runs=1
 --protocols=ara"` to `ns3-build-contrib`. CI
 (`.github/workflows/ns3.yml`) passes `dependencies:
-swarm-core=swarm-routing/ns3-swarm-core@<swarm-core.lock's tag>` and
+swarm-core=swarm-routing/swarm-adapter-ns3@<a swarm-adapter-ns3 release>` and
 `routing-bench=swarm-routing/ns3-tools@<an ns3-tools release>:ns3/routing-bench` (releases; the same at `@main` in `canary-dependencies`, a non-blocking leg outside PRs), runs
 `routing-compare --scenario=paper --nNodes=20 --time=30 --runs=1
 --protocols=ara` as the smoke and `ara-example --seed={seed}` as the
