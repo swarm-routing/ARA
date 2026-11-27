@@ -19,7 +19,7 @@ SWARM_CORE_REF ?= v2.1.0
 # when missing; an existing one (a local override) is used as it is.
 SWARM_ADAPTER_REF ?= $(shell sed -n 's#^ *swarm-core=swarm-routing/swarm-adapter-ns3@\(v[^ :]*\).*#\1#p' .github/workflows/ns3.yml | head -1)
 SWARM_ADAPTER_NS3 ?= $(CURDIR)/../swarm-adapter-ns3
-NS3_RUN = docker run --rm -v "$(CURDIR):/src/ara:ro" -v "$(SWARM_ADAPTER_NS3):/src/swarm-adapter-ns3:ro" $(NS3_IMAGE) \
+NS3_RUN = docker run --rm -v "$(CURDIR):/src/ara:ro" -v "$(abspath $(SWARM_ADAPTER_NS3)):/src/swarm-adapter-ns3:ro" $(NS3_IMAGE) \
 	ns3-build-contrib --strict-warnings --quality-modules ara
 
 .DEFAULT_GOAL := help
