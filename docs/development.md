@@ -28,14 +28,15 @@ to download swarm-core (see "Dependencies").
 
 ## Get the code
 
-The ns-3 build also needs swarm-routing/ns3-swarm-core checked out next to
-this repository, at the release `swarm-core.lock` names (the tag CI builds
-on):
+The ns-3 build also needs swarm-routing/swarm-adapter-ns3 (the ns-3 module
+`swarm-core`) checked out next to this repository, at the release
+`.github/workflows/ns3.yml`'s `dependencies:` names (the tag CI builds on;
+`make build` clones it there when it is missing):
 
 ```bash
 git clone https://github.com/swarm-routing/ARA.git
-git clone --branch "$(sed -n 's/^SWARM_CORE_TAG=//p' ARA/swarm-core.lock)" \
-    https://github.com/swarm-routing/ns3-swarm-core.git
+git clone --branch "$(sed -n 's#^ *swarm-core=swarm-routing/swarm-adapter-ns3@\(v[^ :]*\).*#\1#p' ARA/.github/workflows/ns3.yml | head -1)" \
+    https://github.com/swarm-routing/swarm-adapter-ns3.git
 # only for the comparison harness ("Run"): ns3-tools at the release ns3.yml names
 git clone --branch "$(sed -n 's#.*routing-bench=swarm-routing/ns3-tools@\(v[^:]*\):.*#\1#p' ARA/.github/workflows/ns3.yml | head -1)" \
     https://github.com/swarm-routing/ns3-tools.git
@@ -43,7 +44,7 @@ cd ARA
 ```
 
 All three checkouts sit side by side; the commands below mount them as
-`../ns3-swarm-core` and `../ns3-tools`. There are no submodules.
+`../swarm-adapter-ns3` and `../ns3-tools`. There are no submodules.
 
 ## Dependencies
 
@@ -75,11 +76,11 @@ The ns-3 module, with swarm-core's, inside the `ns3-dev` image (both
 checkouts mounted read-only; only the contrib modules compile):
 
 ```bash
-make build    # uses ../ns3-swarm-core; SWARM_CORE_NS3=/path/to/checkout to change it
+make build    # uses ../swarm-adapter-ns3 (cloned at ns3.yml's tag if missing); SWARM_ADAPTER_NS3=/path/to/checkout to change it
 # the same command written out:
-docker run --rm -v "$PWD:/src/ara:ro" -v "$PWD/../ns3-swarm-core:/src/ns3-swarm-core:ro" \
+docker run --rm -v "$PWD:/src/ara:ro" -v "$PWD/../swarm-adapter-ns3:/src/swarm-adapter-ns3:ro" \
     ghcr.io/swarm-routing/ns3-dev:latest-debug \
-    ns3-build-contrib --strict-warnings --quality-modules ara swarm-core=/src/ns3-swarm-core ara=/src/ara/ns3
+    ns3-build-contrib --strict-warnings --quality-modules ara swarm-core=/src/swarm-adapter-ns3 ara=/src/ara/ns3
 ```
 
 ## Test
@@ -103,9 +104,9 @@ The module's example, a small mobile network (`--seed` picks the run; the
 same seed gives byte-identical output, which CI checks):
 
 ```bash
-docker run --rm -v "$PWD:/src/ara:ro" -v "$PWD/../ns3-swarm-core:/src/ns3-swarm-core:ro" \
+docker run --rm -v "$PWD:/src/ara:ro" -v "$PWD/../swarm-adapter-ns3:/src/swarm-adapter-ns3:ro" \
     ghcr.io/swarm-routing/ns3-dev:latest-debug \
-    ns3-build-contrib --run "ara-example --seed=1" swarm-core=/src/ns3-swarm-core ara=/src/ara/ns3
+    ns3-build-contrib --run "ara-example --seed=1" swarm-core=/src/swarm-adapter-ns3 ara=/src/ara/ns3
 ```
 
 The harness arm: `routing-compare`, from swarm-routing/ns3-tools, runs `ara`
@@ -113,10 +114,10 @@ on a scenario and prints the `##RUN##` line (delivery ratio, delay,
 overhead) CI's smoke reads. With ns3-tools cloned next to this repository:
 
 ```bash
-docker run --rm -v "$PWD:/src/ara:ro" -v "$PWD/../ns3-swarm-core:/src/ns3-swarm-core:ro" \
+docker run --rm -v "$PWD:/src/ara:ro" -v "$PWD/../swarm-adapter-ns3:/src/swarm-adapter-ns3:ro" \
     -v "$PWD/../ns3-tools:/src/ns3-tools:ro" ghcr.io/swarm-routing/ns3-dev:latest-debug \
     ns3-build-contrib --run "routing-compare --scenario=paper --nNodes=20 --time=30 --runs=1 --protocols=ara" \
-    swarm-core=/src/ns3-swarm-core routing-bench=/src/ns3-tools/ns3/routing-bench ara=/src/ara/ns3
+    swarm-core=/src/swarm-adapter-ns3 routing-bench=/src/ns3-tools/ns3/routing-bench ara=/src/ara/ns3
 ```
 
 Paired comparisons over many seeds (a change test, the anchor against the
@@ -190,11 +191,12 @@ What each release must show is [roadmap.md](roadmap.md).
 ## Troubleshooting
 
 - **`make build` or `make test` cannot find swarm-core.** They mount
-  `../ns3-swarm-core`; clone it there (see "Get the code") or pass
-  `SWARM_CORE_NS3=/path/to/checkout`.
+  `../swarm-adapter-ns3` and clone it there at ns3.yml's tag when it is
+  missing (see "Get the code"); pass `SWARM_ADAPTER_NS3=/path/to/checkout`
+  to use another checkout.
 - **The ns-3 build fails on a swarm-core symbol that CI does not complain
-  about.** Your swarm-core checkout is on `main`, not the release in
-  `swarm-core.lock`; check out that tag.
+  about.** Your swarm-adapter-ns3 checkout is on `main`, not the release
+  `ns3.yml`'s `dependencies:` names (`make build` warns); check out that tag.
 - **The first `core/` configure fails offline.** It downloads swarm-core's
   release tarball; configure once online, or point `SWARM_CORE_DIR` at a
   checkout's `core/`.
